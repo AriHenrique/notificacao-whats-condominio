@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 import requests
@@ -71,20 +71,42 @@ def cadastro():
 
 @app.route('/adicionar', methods=['POST'])
 def adicionar_morador():
-    bloco = request.form.get('bloco')
-    apartamento = request.form.get('apartamento')
-    contatos = request.form.getlist('contato')
+    if request.is_json:
+        data = request.get_json()
+        bloco = data.get('bloco')
+        apartamento = data.get('apartamento')
+        contato = data.get('contato')
+    else:
 
-    if bloco and apartamento and contatos:
-        for contato in contatos:
-            if contato.strip():  # Evitar salvar contatos vazios
+        bloco = request.form.get('bloco')
+        apartamento = request.form.get('apartamento')
+        contatos = request.form.getlist('contato')
+        print(f"bloco: {bloco}")
+        print(f"apartamento: {apartamento}")
+        print(f"contatos: {contatos}")
+
+    if bloco and apartamento:
+        if request.is_json:  # Adicionar morador enviado via JSON
+            novo_morador = Morador(bloco=bloco, apartamento=apartamento, contato=contato)
+            db.session.add(novo_morador)
+        else:  # Adicionar moradores enviados pelo formulário
+            for contato in contatos:
+                print(f"contato: {contato}")
                 novo_morador = Morador(bloco=bloco, apartamento=apartamento, contato=contato)
                 db.session.add(novo_morador)
         db.session.commit()
         flash('Morador cadastrado com sucesso!')
+        if request.is_json:
+            return jsonify({"message": "Morador cadastrado com sucesso!"}), 201
+        else:
+            return redirect(url_for('cadastro'))
     else:
-        flash('Por favor, preencha todos os campos corretamente!')
-    return redirect(url_for('cadastro'))
+        if request.is_json:
+            return jsonify({"error": "Por favor, preencha todos os campos corretamente!"}), 400
+        else:
+            flash('Por favor, preencha todos os campos corretamente!')
+            return redirect(url_for('cadastro'))
+
 
 # ========= Rota para Remover Morador ===========
 @app.route('/remover', methods=['GET', 'POST'])
@@ -112,11 +134,12 @@ def modificar_contatos():
 
     bloco_selecionado = request.form.get('bloco')
     apartamento_selecionado = request.form.get('apartamento')
-
+    print(f"bloco_selecionado: {bloco_selecionado}")
+    print(f"apartamento_selecionado: {apartamento_selecionado}")
     _Morador = []
     if request.method == 'POST':
         _Morador = Morador.query.filter_by(bloco=bloco_selecionado, apartamento=apartamento_selecionado).all()
-
+        print(_Morador)
     return render_template(
         'modificar.html',
         blocos=blocos_predefinidos,
@@ -138,7 +161,7 @@ def atualizar_contatos():
 
     # Atualizar contatos
     for contato_id, novo_contato in zip(contatos_ids, novos_contatos):
-        if novo_contato.strip():
+        if novo_contato:
             morador = Morador.query.get(contato_id)
             morador.contato = novo_contato
         else:

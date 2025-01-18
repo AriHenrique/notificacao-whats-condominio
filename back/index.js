@@ -45,18 +45,43 @@ function setupClientEventHandlers(client) {
         }
     });
 
-    client.onMessage((message) => {
-        if (message.body === '!Ari' && message.isGroupMsg === false) {
-            client
-                .sendText(message.from, 'Welcome Venom 🕷')
-                .then((result) => {
-                    console.log('Result: ', result);
-                })
-                .catch((erro) => {
-                    console.error('Erro ao enviar mensagem: ', erro);
-                });
-            console.log('Mensagem recebida:', message.body);
+    client.onMessage(async (message) => {
+        try{
+            if (message.body.toLowerCase().includes('cadastrar')) {
+                const regex = /cadastrar\s+(\d+)-(\d+)/i;
+                const correspondencia = message.body.toLowerCase().match(regex);
+                if (correspondencia) {
+                    const bloco = 'Bloco ' + correspondencia[1];
+                    const apartamento = 'Apartamento ' + correspondencia[2];
+                    const contato = message.from.replace('@c.us', '').replace('55', '');
+
+                    try {
+                        const response = await fetch('http://localhost:5000/adicionar', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ bloco, apartamento, contato }),
+                        });
+
+                        if (response.ok) {
+                            await client.sendText(message.from, `Bloco: ${bloco}, Apartamento: ${apartamento}\n\nCadastrado com sucesso!`);
+                        } else {
+                            const errorMsg = await response.json();
+                            await client.sendText(message.from, `Erro ao cadastrar: ${errorMsg.error || 'Erro desconhecido.'}`);
+                        }
+                    } catch (error) {
+                        console.error('Erro ao enviar solicitação ao Flask:', error);
+                        await client.sendText(message.from, 'Erro interno. Não foi possível realizar o cadastro.');
+                    }
+                } else {
+                    await client.sendText(message.from, "Para cadastrar, digite como mostra o exemplo (bloco-apartamento):\n\ncadastrar 1-101");
+                }
+            }
+        }catch (error) {
+            await client.sendText(message.from, "Para cadastrar, digite como mostra o exemplo (bloco-apartamento):\n\ncadastrar 1-101");
         }
+
     });
 }
 
