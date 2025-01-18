@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="text-center mb-4">Modificar Contatos de um Morador</h2>
+<form action="/modificar" method="POST" class="border p-4 rounded shadow-sm">
+    <div class="mb-3">
+        <label for="bloco">Bloco:</label>
+        <select name="bloco" class="form-control form-control-sm" required>
+            {% for bloco in blocos %}
+            <option value="{{ bloco }}" {% if bloco == bloco_selecionado %}selected{% endif %}>
+                {{ bloco }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="apartamento">Apartamento:</label>
+        <select name="apartamento" class="form-control form-control-sm" required>
+            {% for apt in apartamentos %}
+            <option value="{{ apt }}" {% if apt == apartamento_selecionado %}selected{% endif %}>
+                {{ apt }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <button type="submit" class="btn btn-info w-100 mt-3">Buscar Contatos</button>
+</form>
+
+{% if Morador %}
+<hr>
+<h4>Contatos Encontrados:</h4>
+<form action="/atualizar_contatos" method="POST">
+    <input type="hidden" name="bloco" value="{{ bloco_selecionado }}">
+    <input type="hidden" name="apartamento" value="{{ apartamento_selecionado }}">
+
+    {% for morador in Morador %}
+    <div class="mb-3">
+        <label>Contato:</label>
+        <input type="text" name="contato" value="{{ morador.contato }}" class="form-control form-control-sm">
+        <input type="hidden" name="contato_id" value="{{ morador.id }}">
+    </div>
+    {% endfor %}
+
+    <button type="submit" class="btn btn-warning w-100 mt-3">Salvar Modificações</button>
+</form>
+{% endif %}
+{% endblock %}

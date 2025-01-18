@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="text-center mb-4">Remover Todos os Contatos</h2>
+<form action="/remover" method="POST" class="border p-4 rounded shadow-sm">
+    <div class="mb-3">
+        <label for="bloco">Bloco:</label>
+        <select name="bloco" class="form-control form-control-sm" required>
+            {% for bloco in blocos %}
+            <option value="{{ bloco }}">{{ bloco }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="apartamento">Apartamento:</label>
+        <select name="apartamento" class="form-control form-control-sm" required>
+            {% for apt in apartamentos %}
+            <option value="{{ apt }}">{{ apt }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <button type="submit" class="btn btn-danger w-100 mt-3">Remover Todos os Contatos</button>
+</form>
+{% endblock %}

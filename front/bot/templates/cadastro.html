@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="text-center mb-4">Cadastro de Moradores</h2>
+<form action="/adicionar" method="POST" class="border p-4 rounded shadow-sm">
+    <div class="mb-3">
+        <label for="bloco">Bloco:</label>
+        <select name="bloco" class="form-control form-control-sm" required>
+            {% for bloco in blocos %}
+            <option value="{{ bloco }}">{{ bloco }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="apartamento">Apartamento:</label>
+        <select name="apartamento" class="form-control form-control-sm" required>
+            {% for apt in apartamentos %}
+            <option value="{{ apt }}">{{ apt }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <!-- Campo de Contatos Dinâmicos -->
+    <div class="mb-3">
+        <label for="contato">Contatos:</label>
+        <div id="contatos-container">
+            <input type="text" name="contato" class="form-control form-control-sm mb-2" required>
+        </div>
+        <button type="button" onclick="adicionarContato()" class="btn btn-success btn-sm">+ Adicionar Contato</button>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100 mt-3">Cadastrar Morador</button>
+</form>
+
+<!-- Script para adicionar mais campos de contato -->
+<script>
+    function adicionarContato() {
+        const container = document.getElementById('contatos-container');
+        const novoCampo = document.createElement('input');
+        novoCampo.type = 'text';
+        novoCampo.name = 'contato';
+        novoCampo.className = 'form-control form-control-sm mb-2';
+        container.appendChild(novoCampo);
+    }
+</script>
+{% endblock %}

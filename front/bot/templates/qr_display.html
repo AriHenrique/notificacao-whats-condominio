@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code do WhatsApp</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px; /* Espaçamento entre os botões */
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body class="text-center d-flex align-items-center justify-content-center vh-100">
+<div class="container">
+    <h1 class="mb-4">QR Code para Autenticação no WhatsApp</h1>
+    <!-- Exibir o QR Code gerado -->
+    <div class="mb-4">
+        {{ qr_code_html | safe }}
+    </div>
+    <!-- Botões centralizados e espaçados -->
+    <div class="button-container">
+        <a href="/cadastro" class="btn btn-primary btn-lg">Ir para Cadastro</a>
+        <a href="/" class="btn btn-secondary btn-lg">Voltar à Página Inicial</a>
+    </div>
+</div>
+
+<!-- Script para monitorar o status do WhatsApp -->
+<script>
+    function checkWhatsAppStatus() {
+        fetch('/whatsapp-status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.connected) {
+                    window.location.href = "/notificacao";
+                }
+            })
+            .catch(error => {
+                console.error("Erro ao verificar o status do WhatsApp:", error);
+            });
+    }
+    setInterval(checkWhatsAppStatus, 1000);
+</script>
+</body>
+</html>

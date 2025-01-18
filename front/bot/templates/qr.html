@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tela Inicial - QR Code</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .button-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px; /* Espaçamento entre os botões */
+            margin-top: 20px;
+        }
+        .status-message {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body class="text-center d-flex align-items-center justify-content-center vh-100">
+<div class="container">
+    <h1 class="mb-4">Conectar ao WhatsApp</h1>
+
+    <!-- Exibir mensagens baseadas no status -->
+    {% if conectado == True %}
+    <p class="status-message text-success">✅ O WhatsApp já está conectado!</p>
+    {% elif conectado == False %}
+    <p class="status-message text-warning">⚠️ O WhatsApp ainda não está conectado. Escaneie o QR Code.</p>
+    {% else %}
+    <p class="status-message text-danger">❌ Não foi possível verificar o status de conexão. Verifique se o servidor está ativo.</p>
+    {% endif %}
+
+    <!-- Botões centralizados e espaçados -->
+    <div class="button-container">
+        <a href="/mostrar_qr" class="btn btn-success btn-lg">Exibir QR Code</a>
+        <a href="/cadastro" class="btn btn-primary btn-lg">Ir para Cadastro de Morador</a>
+    </div>
+</div>
+</body>
+</html>
