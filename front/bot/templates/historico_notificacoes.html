@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Encomendas a Retirar{% endblock %}
+
+{% block content %}
+<h2 class="text-center mb-4">Encomendas a Retirar</h2>
+<table class="table table-bordered table-striped">
+    <thead class="table-primary">
+    <tr>
+        <th>Bloco</th>
+        <th>Apartamento</th>
+        <th>Última Notificação</th>
+        <th>Ações</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for morador in moradores %}
+    {% if morador.encomenda_pendente %}
+    <tr>
+        <td>{{ morador.bloco }}</td>
+        <td>{{ morador.apartamento }}</td>
+        <td>
+            {% if morador.ultima_notificacao %}
+            {{ morador.ultima_notificacao.strftime('%d/%m/%Y %H:%M') }}
+            {% else %}
+            Nunca
+            {% endif %}
+        </td>
+        <td>
+            <form action="/remover-encomenda-porteiro/{{ morador.id }}" method="POST" style="display:inline;">
+                <button type="submit" class="btn btn-danger btn-sm">Marcar como Retirada</button>
+            </form>
+        </td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

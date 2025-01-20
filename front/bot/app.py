@@ -7,20 +7,23 @@ import os
 import signal
 import psutil
 import threading
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///Morador.db'
 db = SQLAlchemy(app)
 is_whatsapp_connected = False
+cadastro_ativo_via_mensagem = False
 
-
-# Modelo de dados atualizado (sem o campo 'nome')
 class Morador(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     bloco = db.Column(db.String(50), nullable=False)
     apartamento = db.Column(db.String(50), nullable=False)
     contato = db.Column(db.String(100), nullable=False)
+    ultima_notificacao = db.Column(db.DateTime, nullable=True)
+    encomenda_pendente = db.Column(db.Boolean, default=False)
+
 
 
 # Criação do banco de dados
@@ -53,6 +56,18 @@ def home():
     else:
         return redirect(url_for('notificacao'))
 
+@app.context_processor
+def inject_cadastro_status():
+    global cadastro_ativo_via_mensagem
+    return {"cadastro_ativo": cadastro_ativo_via_mensagem}
+
+@app.route('/toggle-cadastro-mensagem', methods=['POST'])
+def toggle_cadastro_mensagem():
+    global cadastro_ativo_via_mensagem
+    cadastro_ativo_via_mensagem = not cadastro_ativo_via_mensagem
+    estado = "ativado" if cadastro_ativo_via_mensagem else "desativado"
+    flash(f"Cadastro automático via mensagem foi {estado}{', comunique com a portaria para reativar ou realizar o cadastro.' if estado == 'desativado' else ''}")
+    return redirect(request.referrer or '/')
 
 @app.route('/mostrar_qr')
 def mostrar_qr():
@@ -67,6 +82,12 @@ def mostrar_qr():
     return render_template('qr_display.html', qr_code_html=qr_code_html, conectado=is_whatsapp_connected)
 
 
+@app.route('/historico-notificacoes')
+def historico_notificacoes():
+    moradores = Morador.query.filter_by(encomenda_pendente=True).order_by(Morador.bloco, Morador.apartamento).all()
+    return render_template('historico_notificacoes.html', moradores=moradores)
+
+
 # ========= Rota para Cadastro ===========
 @app.route('/cadastro')
 def cadastro():
@@ -78,8 +99,11 @@ def cadastro():
 
 @app.route('/adicionar', methods=['POST'])
 def adicionar_morador():
-    global contato, contatos
+    global contato, contatos, cadastro_ativo_via_mensagem
+
     if request.is_json:
+        if not cadastro_ativo_via_mensagem:
+            return jsonify({"error": "Cadastro automático via mensagem está desativado."}), 403
         data = request.get_json()
         bloco = data.get('bloco')
         apartamento = data.get('apartamento')
@@ -94,16 +118,26 @@ def adicionar_morador():
         print(f"contatos: {contatos}")
 
     if bloco and apartamento:
-        if request.is_json:  # Adicionar morador enviado via JSON
-            novo_morador = Morador(bloco=bloco, apartamento=apartamento, contato=contato)
-            db.session.add(novo_morador)
-        else:  # Adicionar moradores enviados pelo formulário
-            for contato in contatos:
-                print(f"contato: {contato}")
+        if request.is_json:
+            morador_existente = Morador.query.filter_by(bloco=bloco, apartamento=apartamento, contato=contato).first()
+            if not morador_existente:
                 novo_morador = Morador(bloco=bloco, apartamento=apartamento, contato=contato)
                 db.session.add(novo_morador)
-        db.session.commit()
-        flash('Morador cadastrado com sucesso!')
+                db.session.commit()
+                flash('Morador cadastrado com sucesso!')
+            else:
+                flash('Este morador já está cadastrado.')
+        else:
+            for contato in contatos:
+                print(f"contato: {contato}")
+                morador_existente = Morador.query.filter_by(bloco=bloco, apartamento=apartamento, contato=contato).first()
+                if not morador_existente:
+                    novo_morador = Morador(bloco=bloco, apartamento=apartamento, contato=contato)
+                    db.session.add(novo_morador)
+                else:
+                    flash(f'O contato {contato} já está cadastrado para o {bloco} - {apartamento}.')
+            db.session.commit()
+            flash('Cadastro atualizado com novos moradores!')
         if request.is_json:
             return jsonify({"message": "Morador cadastrado com sucesso!"}), 201
         else:
@@ -194,16 +228,23 @@ def notificacao():
 def enviar_notificacao():
     bloco = request.form.get('bloco')
     apartamento = request.form.get('apartamento')
-    mensagem_padrao = f"""📦 *Atenção, morador! {bloco} - {apartamento}*
-Há encomendas disponíveis para retirada na portaria. 
-Por favor, compareça para a retirada o mais breve possível.
-    
-Obrigado pela colaboração!
-_Portaria_"""
+    mensagem_padrao = f"""📦 *Aviso Importante: Encomenda Disponível!*\n
+Prezado morador do *{bloco} - {apartamento}*,
+
+Informamos que há uma encomenda disponível para retirada na portaria.
+
+✅ *O que fazer?*
+- Por favor, compareça à portaria o mais breve possível para retirar sua encomenda.
+- Após a retirada, você pode enviar a palavra *_retirada_* nesta conversa para confirmar a retirada, ou solicitar ao porteiro que marque a encomenda como retirada no sistema.
+
+Agradecemos sua colaboração! 
+📍 _Portaria_
+"""
+
 
     # Buscar contatos relacionados
     _Morador = Morador.query.filter_by(bloco=bloco, apartamento=apartamento).all()
-    if not Morador:
+    if not _Morador:
         flash('Nenhum contato encontrado para esse apartamento.')
         return redirect(url_for('notificacao'))
 
@@ -215,6 +256,10 @@ _Portaria_"""
             if resp.status_code == 500:
                 return redirect(url_for('mostrar_qr'))
             elif resp.status_code == 200:
+                # Atualizar a data e hora da última notificação e marcar como pendente
+                morador.ultima_notificacao = datetime.now()
+                morador.encomenda_pendente = True
+                db.session.commit()
                 flash(f"Mensagem enviada para {bloco} - {apartamento}")
             else:
                 flash(f"Erro ao enviar mensagem: {resp.text}")
@@ -222,6 +267,44 @@ _Portaria_"""
             flash(f"Erro ao enviar mensagem: {str(e)}")
             return redirect(url_for('mostrar_qr'))
     return redirect(url_for('notificacao'))
+
+
+@app.route('/remover-encomenda/<contato>', methods=['POST'])
+def remover_encomenda(contato):
+    morador = Morador.query.filter_by(contato=contato, encomenda_pendente=True).first()
+    if morador:
+        morador.encomenda_pendente = False
+        db.session.commit()
+        return jsonify({"message": f"Encomenda do {morador.bloco} - {morador.apartamento} foi marcada como retirada."}), 200
+    else:
+        return jsonify({"error": "Nenhuma encomenda pendente encontrada para este contato."}), 404
+
+@app.route('/remover-encomenda-porteiro/<int:id>', methods=['POST'])
+def remover_encomenda_porteiro(id):
+    morador = Morador.query.get_or_404(id)
+    if morador.encomenda_pendente:
+        morador.encomenda_pendente = False
+        db.session.commit()
+
+        # Enviar notificação para todos os contatos do bloco e apartamento
+        moradores_no_apartamento = Morador.query.filter_by(
+            bloco=morador.bloco, apartamento=morador.apartamento
+        ).all()
+        for contato_morador in moradores_no_apartamento:
+            mensagem = f"📦 Olá! A encomenda no {morador.bloco} - {morador.apartamento} foi registrada como retirada."
+            try:
+                requests.post(
+                    'http://localhost:3000/enviar-mensagem',
+                    json={"contato": contato_morador.contato, "mensagem": mensagem}
+                )
+            except Exception as e:
+                print(f"Erro ao enviar notificação para {contato_morador.contato}: {e}")
+
+        flash(f"A notificação foi enviada para todos os moradores do {morador.bloco} - {morador.apartamento}.")
+    else:
+        flash("Nenhuma encomenda pendente encontrada para este morador.")
+    return redirect(url_for('historico_notificacoes'))
+
 
 
 @app.route('/fechar')
@@ -244,4 +327,4 @@ if __name__ == '__main__':
     if caminho_pasta.exists() and caminho_pasta.is_dir():
         status_thread = threading.Thread(target=update_whatsapp_status, daemon=True)
         status_thread.start()
-    app.run()
+    app.run(debug=True)

@@ -33,7 +33,7 @@ function initializeVenomBot() {
         .catch((error) => {
             console.error('Erro ao inicializar o Venom-Bot:', error);
             console.log('Tentando reiniciar o Venom-Bot em 5 segundos...');
-            setTimeout(initializeVenomBot, 5000); // Rechama a função após 5 segundos
+            setTimeout(initializeVenomBot, 5000);
         });
 }
 
@@ -46,17 +46,46 @@ function setupClientEventHandlers(client) {
     });
 
     client.onMessage(async (message) => {
-        try{
-            if (message.body.toLowerCase().includes('cadastrar')) {
+        try {
+            const _contato = message.from.replace('@c.us', '').replace('55', '');
+            const regex9 = /^(\d{2})(\d+)$/;
+            const match = _contato.match(regex9);
+            const ddd = match[1];
+            const numero = match[2];
+            const contato = `${ddd}9${numero}`;
+
+            // Caso o morador envie "retirada"
+            if (message.body.toLowerCase().trim() === "retirada") {
+                try {
+                    const response = await fetch(`http://127.0.0.1:5000/remover-encomenda/${contato}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                    });
+
+                    if (response.ok) {
+                        await client.sendText(message.from, "Obrigado! A encomenda foi registrada como retirada no sistema.");
+                    } else {
+                        const errorMsg = await response.json();
+                        await client.sendText(message.from, `Erro ao processar a retirada: ${errorMsg.error || 'Erro desconhecido.'}`);
+                    }
+                } catch (error) {
+                    console.error('Erro ao enviar solicitação ao Flask:', error);
+                    await client.sendText(message.from, 'Erro interno. Não foi possível processar sua retirada.');
+                }
+            }
+            // Caso o morador envie "cadastrar"
+            else if (message.body.toLowerCase().startsWith("cadastrar")) {
                 const regex = /cadastrar\s+(\d+)-(\d+)/i;
                 const correspondencia = message.body.toLowerCase().match(regex);
                 if (correspondencia) {
                     const bloco = 'Bloco ' + correspondencia[1];
                     const apartamento = 'Apartamento ' + correspondencia[2];
-                    const contato = message.from.replace('@c.us', '').replace('55', '');
+                    console.log(JSON.stringify({ bloco, apartamento, contato }));
 
                     try {
-                        const response = await fetch('http://localhost:5000/adicionar', {
+                        const response = await fetch('http://127.0.0.1:5000/adicionar', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -65,23 +94,29 @@ function setupClientEventHandlers(client) {
                         });
 
                         if (response.ok) {
-                            await client.sendText(message.from, `Bloco: ${bloco}, Apartamento: ${apartamento}\n\nCadastrado com sucesso!`);
+                            await client.sendText(message.from, `${bloco}, ${apartamento}\n\nCadastrado com sucesso!`);
                         } else {
                             const errorMsg = await response.json();
-                            await client.sendText(message.from, `Erro ao cadastrar: ${errorMsg.error || 'Erro desconhecido.'}`);
+                            await client.sendText(message.from, `${errorMsg.error || 'Erro desconhecido.'}`);
                         }
                     } catch (error) {
                         console.error('Erro ao enviar solicitação ao Flask:', error);
                         await client.sendText(message.from, 'Erro interno. Não foi possível realizar o cadastro.');
                     }
                 } else {
-                    await client.sendText(message.from, "Para cadastrar, digite como mostra o exemplo (bloco-apartamento):\n\ncadastrar 1-101");
+                    await client.sendText(
+                        message.from,
+                        `📋 *Cadastro de Morador*
+Para se cadastrar, digite a palavra *cadastrar* seguida do número do bloco e apartamento, separados por um traço. 
+🔹 *Exemplo*: 
+Digite: *cadastrar 1-101*`
+                    );
                 }
             }
-        }catch (error) {
-            await client.sendText(message.from, "Para cadastrar, digite como mostra o exemplo (bloco-apartamento):\n\ncadastrar 1-101");
+        } catch (error) {
+            console.error('Erro no processamento da mensagem:', error);
+            await client.sendText(message.from, 'Erro ao processar sua mensagem. Tente novamente mais tarde.');
         }
-
     });
 }
 
@@ -118,7 +153,7 @@ app.post('/enviar-mensagem', async (req, res) => {
 app.get('/encerrar', (req, res) => {
     console.log('Encerrando o servidor Node.js...');
     res.send('Servidor Node.js encerrado.');
-    process.exit(0); // Finaliza o processo Node.js
+    process.exit(0);
 });
 
 
@@ -135,4 +170,4 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('Rejeição não tratada:', reason);
 });
 
-process.stdin.resume(); // Mantém o processo ativo indefinidamente
+process.stdin.resume();

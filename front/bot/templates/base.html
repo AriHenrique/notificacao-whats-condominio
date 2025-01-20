@@ -7,93 +7,44 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link rel="icon" href="{{ url_for('static', filename='notification.ico') }}" type="image/x-icon">
     <link rel="shortcut icon" href="{{ url_for('static', filename='notification.ico') }}" type="image/x-icon">
-    <style>
-        /* Estilos para os botões de navegação */
-        .navbar-nav .nav-item .nav-link {
-            margin: 0 3px;
-            padding: 3px 10px;
-            border: 1px solid rgba(255, 255, 255, 0.5); /* Contorno leve */
-            border-radius: 5px;
-            color: #fff;
-            transition: all 0.3s ease-in-out;
-        }
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
-        .navbar-nav .nav-item .nav-link:hover {
-            background-color: rgba(255, 255, 255, 0.2);
-            border-color: rgba(255, 255, 255, 0.8); /* Intensifica o contorno */
-            color: #f8f9fa; /* Um branco mais claro */
-        }
-
-        /* Estilos específicos para o botão "Fechar Sistema" */
-        .nav-item .btn-danger {
-            background-color: #dc3545;
-            color: #fff;
-            border: 1px solid rgba(255, 0, 0, 0.5);
-            padding: 5px 15px;
-            border-radius: 5px;
-            transition: all 0.3s ease-in-out;
-        }
-
-        .nav-item .btn-danger:hover {
-            background-color: #b02a37;
-            color: #fff;
-            border-color: #ff0000;
-        }
-
-        /* Ajuste para rótulos e campos menores */
-        .container {
-            max-width: 600px;
-        }
-
-        /* Estilo específico para botão conectado */
-        .nav-item .btn-success {
-            background-color: #28a745;
-            color: #fff;
-            border: 1px solid rgba(40, 167, 69, 0.5);
-        }
-
-        .nav-item .btn-success:hover {
-            background-color: #218838;
-            border-color: rgba(40, 167, 69, 0.8);
-        }
-    </style>
 </head>
 <body>
-<!-- Barra de Navegação -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="/">Portaria</a>
-        <div class="collapse navbar-collapse">
-            <!-- Botões alinhados à esquerda -->
-            <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link {% if conectado %}btn btn-success text-white{% else %}btn btn-warning text-dark{% endif %}" href="/">
-                        {% if conectado %}WhatsApp Conectado{% else %}Conectar com WhatsApp{% endif %}
-                    </a>
-                </li>
-                <li class="nav-item"><a class="nav-link" href="/cadastro">Cadastro</a></li>
-                <li class="nav-item"><a class="nav-link" href="/remover">Remover Morador</a></li>
-                <li class="nav-item"><a class="nav-link" href="/modificar">Modificar Contatos</a></li>
-                <li class="nav-item"><a class="nav-link" href="/notificacao">Enviar Notificação</a></li>
-            </ul>
-            <!-- Botão Fechar alinhado à direita -->
-            <ul class="navbar-nav ms-auto">
-                <li class="nav-item">
-                    <a class="btn btn-danger" href="/fechar" onclick="return confirm('Tem certeza que deseja fechar o sistema?')">Fechar Sistema</a>
-                </li>
-            </ul>
-        </div>
-    </div>
-</nav>
-
-<!-- Área de Mensagens -->
-<div class="container">
-    {% with messages = get_flashed_messages() %}
-    {% if messages %}
-    <div class="alert alert-info">{{ messages[0] }}</div>
-    {% endif %}
-    {% endwith %}
-    {% block content %}{% endblock %}
+<!-- Menu Lateral -->
+<div class="sidebar">
+    <h4 class="text-white mb-4">Portaria</h4>
+    <nav class="nav flex-column">
+        <!-- Botão do WhatsApp -->
+        <a class="nav-link btn {% if conectado %}btn-success{% else %}btn-warning text-dark{% endif %}" href="/">
+            {% if conectado %}WhatsApp Conectado{% else %}Conectar com WhatsApp{% endif %}
+        </a>
+        <a class="nav-link btn btn-primary" href="/cadastro">Cadastro</a>
+        <a class="nav-link btn btn-primary" href="/remover">Remover Morador</a>
+        <a class="nav-link btn btn-primary" href="/modificar">Modificar Contatos</a>
+        <a class="nav-link btn btn-primary" href="/notificacao">Enviar Notificação</a>
+        <a class="nav-link btn btn-primary" href="/historico-notificacoes">Encomendas a Retirar</a>
+        <form method="post" action="/toggle-cadastro-mensagem" class="m-0">
+            <button type="submit" class="btn btn-toggle-cadastro {% if cadastro_ativo %}btn-success{% else %}btn-warning text-dark{% endif %}">
+                {% if cadastro_ativo %}Desativar Cadastro Automático{% else %}Ativar Cadastro Automático{% endif %}
+            </button>
+        </form>
+        <a class="btn btn-danger" href="/fechar" onclick="return confirm('Tem certeza que deseja fechar o sistema?')">Fechar Sistema</a>
+    </nav>
 </div>
+
+<!-- Área de Conteúdo -->
+<div class="content">
+    <div class="container content-container">
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="alert alert-info">{{ messages[0] }}</div>
+        {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
