@@ -2,25 +2,99 @@
 
 {% block content %}
 <h2 class="text-center mb-4">Enviar Notificação</h2>
-<form action="/enviar_notificacao" method="POST" class="border p-4 rounded shadow-sm">
-    <div class="mb-3">
-        <label for="bloco">Bloco:</label>
-        <select name="bloco" class="form-control form-control-sm" required>
-            {% for bloco in blocos %}
-            <option value="{{ bloco }}">{{ bloco }}</option>
-            {% endfor %}
-        </select>
+
+<!-- Abas para alternar entre envio individual e envio em grupo -->
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link active" id="individual-tab" data-bs-toggle="tab" href="#individual">Envio Individual</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" id="grupo-tab" data-bs-toggle="tab" href="#grupo">Envio em Grupo</a>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- Envio Individual -->
+    <div class="tab-pane fade show active" id="individual">
+        <form action="/enviar_notificacao" method="POST" class="border p-4 rounded shadow-sm">
+            <div class="mb-3">
+                <label for="bloco">Bloco:</label>
+                <select id="bloco-select" name="bloco" class="form-control form-control-sm" required>
+                    <option value="">Selecione um bloco</option>
+                    {% for bloco in blocos %}
+                    <option value="{{ bloco }}">{{ bloco }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="apartamento">Apartamento:</label>
+                <select id="apartamento-select" name="apartamento" class="form-control form-control-sm" required>
+                    <option value="">Selecione um apartamento</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mt-3">Enviar Notificação</button>
+        </form>
     </div>
 
-    <div class="mb-3">
-        <label for="apartamento">Apartamento:</label>
-        <select name="apartamento" class="form-control form-control-sm" required>
-            {% for apt in apartamentos %}
-            <option value="{{ apt }}">{{ apt }}</option>
-            {% endfor %}
-        </select>
-    </div>
+    <script>
+        // Dados dinâmicos de blocos e apartamentos enviados do backend
+        const apartamentosPorBloco = {{ apartamentos_por_bloco|tojson }};
 
-    <button type="submit" class="btn btn-info w-100 mt-3">Enviar Notificação</button>
-</form>
+        // Elementos de seleção
+        const blocoSelect = document.getElementById('bloco-select');
+        const apartamentoSelect = document.getElementById('apartamento-select');
+
+        // Atualizar a lista de apartamentos com base no bloco selecionado
+        blocoSelect.addEventListener('change', function () {
+            const blocoSelecionado = this.value;
+
+            // Limpar os apartamentos atuais
+            apartamentoSelect.innerHTML = '<option value="">Selecione um apartamento</option>';
+
+            // Adicionar os apartamentos relacionados ao bloco selecionado
+            if (blocoSelecionado && apartamentosPorBloco[blocoSelecionado]) {
+                apartamentosPorBloco[blocoSelecionado].forEach(function (apartamento) {
+                    const option = document.createElement('option');
+                    option.value = apartamento;
+                    option.textContent = apartamento;
+                    apartamentoSelect.appendChild(option);
+                });
+            }
+        });
+    </script>
+
+    <!-- Envio em Grupo -->
+    <div class="tab-pane fade" id="grupo">
+        <form action="/enviar_notificacao_em_grupo" method="POST" class="border p-4 rounded shadow-sm">
+            <div class="row">
+                <!-- Renderizar apenas blocos cadastrados -->
+                {% for bloco, apartamentos in apartamentos_por_bloco.items() %}
+                <div class="col-md-4">
+                    <div class="card mb-3 border-primary shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title text-primary">{{ bloco }}</h5>
+                            <p class="card-text text-muted">Selecione os apartamentos deste bloco:</p>
+                            <hr>
+                            <!-- Listar apenas apartamentos cadastrados -->
+                            {% for apt in apartamentos %}
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" name="destinatarios" value="{{ bloco }}|{{ apt }}" id="{{ bloco }}-{{ apt }}">
+                                <label class="form-check-label fw-bold text-dark" for="{{ bloco }}-{{ apt }}">
+                                    {{ apt }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mt-3">Enviar Notificações</button>
+        </form>
+    </div>
+</div>
 {% endblock %}
+

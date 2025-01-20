@@ -5,7 +5,8 @@
 <form action="/modificar" method="POST" class="border p-4 rounded shadow-sm">
     <div class="mb-3">
         <label for="bloco">Bloco:</label>
-        <select name="bloco" class="form-control form-control-sm" required>
+        <select id="bloco-select" name="bloco" class="form-control form-control-sm" required>
+            <option value="">Selecione um bloco</option>
             {% for bloco in blocos %}
             <option value="{{ bloco }}" {% if bloco == bloco_selecionado %}selected{% endif %}>
                 {{ bloco }}
@@ -16,26 +17,29 @@
 
     <div class="mb-3">
         <label for="apartamento">Apartamento:</label>
-        <select name="apartamento" class="form-control form-control-sm" required>
-            {% for apt in apartamentos %}
+        <select id="apartamento-select" name="apartamento" class="form-control form-control-sm" required>
+            <option value="">Selecione um apartamento</option>
+            {% if bloco_selecionado %}
+            {% for apt in apartamentos_por_bloco.get(bloco_selecionado, []) %}
             <option value="{{ apt }}" {% if apt == apartamento_selecionado %}selected{% endif %}>
                 {{ apt }}
             </option>
             {% endfor %}
+            {% endif %}
         </select>
     </div>
 
     <button type="submit" class="btn btn-info w-100 mt-3">Buscar Contatos</button>
 </form>
 
-{% if Morador %}
+{% if moradores %}
 <hr>
 <h4>Contatos Encontrados:</h4>
 <form action="/atualizar_contatos" method="POST">
     <input type="hidden" name="bloco" value="{{ bloco_selecionado }}">
     <input type="hidden" name="apartamento" value="{{ apartamento_selecionado }}">
 
-    {% for morador in Morador %}
+    {% for morador in moradores %}
     <div class="mb-3">
         <label>Contato:</label>
         <input type="text" name="contato" value="{{ morador.contato }}" class="form-control form-control-sm">
@@ -46,4 +50,34 @@
     <button type="submit" class="btn btn-warning w-100 mt-3">Salvar Modificações</button>
 </form>
 {% endif %}
+
+<script>
+    // Dados de blocos e apartamentos
+    const apartamentosPorBloco = {{ apartamentos_por_bloco|tojson }};
+    const blocoSelect = document.getElementById('bloco-select');
+    const apartamentoSelect = document.getElementById('apartamento-select');
+
+    // Evento de mudança no bloco
+    blocoSelect.addEventListener('change', function () {
+        const bloco = this.value;
+
+        // Limpar dropdown de apartamentos
+        apartamentoSelect.innerHTML = '<option value="">Selecione um apartamento</option>';
+
+        // Preencher apartamentos do bloco selecionado
+        if (bloco && apartamentosPorBloco[bloco]) {
+            apartamentosPorBloco[bloco].forEach(function (apt) {
+                const option = document.createElement('option');
+                option.value = apt;
+                option.textContent = apt;
+                apartamentoSelect.appendChild(option);
+            });
+        }
+    });
+
+    // Preencher automaticamente apartamentos ao carregar a página se já houver um bloco selecionado
+    if (blocoSelect.value) {
+        blocoSelect.dispatchEvent(new Event('change'));
+    }
+</script>
 {% endblock %}

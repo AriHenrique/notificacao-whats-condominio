@@ -85,7 +85,7 @@ def mostrar_qr():
 @app.route('/historico-notificacoes')
 def historico_notificacoes():
     moradores = Morador.query.filter_by(encomenda_pendente=True).order_by(Morador.bloco, Morador.apartamento).all()
-    return render_template('historico_notificacoes.html', moradores=moradores)
+    return render_template('historico_notificacoes.html', moradores=moradores, conectado=is_whatsapp_connected)
 
 
 # ========= Rota para Cadastro ===========
@@ -129,13 +129,18 @@ def adicionar_morador():
                 flash('Este morador já está cadastrado.')
         else:
             for contato in contatos:
-                print(f"contato: {contato}")
-                morador_existente = Morador.query.filter_by(bloco=bloco, apartamento=apartamento, contato=contato).first()
-                if not morador_existente:
-                    novo_morador = Morador(bloco=bloco, apartamento=apartamento, contato=contato)
-                    db.session.add(novo_morador)
-                else:
-                    flash(f'O contato {contato} já está cadastrado para o {bloco} - {apartamento}.')
+                if len(contato) > 0:
+                    try:
+                        _contato = int(contato.strip())
+                    except ValueError:
+                        flash('Contato deve conter apenas números.')
+                    print(f"contato: {contato}")
+                    morador_existente = Morador.query.filter_by(bloco=bloco, apartamento=apartamento, contato=contato).first()
+                    if not morador_existente:
+                        novo_morador = Morador(bloco=bloco, apartamento=apartamento, contato=contato.strip())
+                        db.session.add(novo_morador)
+                    else:
+                        flash(f'O contato {contato} já está cadastrado para o {bloco} - {apartamento}.')
             db.session.commit()
             flash('Cadastro atualizado com novos moradores!')
         if request.is_json:
@@ -153,47 +158,74 @@ def adicionar_morador():
 # ========= Rota para Remover Morador ===========
 @app.route('/remover', methods=['GET', 'POST'])
 def remover_morador():
-    blocos_predefinidos = [f'Bloco {i}' for i in range(1, 10)]
-    apartamentos_predefinidos = [f"Apartamento {i}0{j}" for i in range(1, 6) for j in range(1, 5)]
+    # Obter blocos e apartamentos cadastrados
+    blocos = db.session.query(Morador.bloco).distinct().all()
+    blocos = [bloco[0] for bloco in blocos]
+    apartamentos_por_bloco = {
+        bloco: db.session.query(Morador.apartamento).filter_by(bloco=bloco).distinct().all()
+        for bloco in blocos
+    }
+    apartamentos_por_bloco = {bloco: [apt[0] for apt in apts] for bloco, apts in apartamentos_por_bloco.items()}
 
     if request.method == 'POST':
         bloco = request.form.get('bloco')
         apartamento = request.form.get('apartamento')
 
-        # Remover todos os contatos relacionados
-        db.session.query(Morador).filter_by(bloco=bloco, apartamento=apartamento).delete()
-        db.session.commit()
-        flash(f'Todos os contatos do {bloco} - {apartamento} foram removidos com sucesso.')
+        if bloco and apartamento:
+            # Remover contatos do bloco e apartamento selecionados
+            Morador.query.filter_by(bloco=bloco, apartamento=apartamento).delete()
+            db.session.commit()
+            flash(f"Todos os contatos do {bloco} - {apartamento} foram removidos com sucesso.")
+        else:
+            flash("Por favor, selecione um bloco e um apartamento válidos.")
+
         return redirect(url_for('remover_morador'))
 
-    return render_template('remover.html', blocos=blocos_predefinidos, apartamentos=apartamentos_predefinidos,
-                           conectado=is_whatsapp_connected)
+    return render_template(
+        'remover.html',
+        blocos=blocos,
+        apartamentos_por_bloco=apartamentos_por_bloco,
+        conectado=is_whatsapp_connected
+    )
 
 
 # ========= Rota para Modificar Contatos ===========
 @app.route('/modificar', methods=['GET', 'POST'])
 def modificar_contatos():
-    blocos_predefinidos = [f'Bloco {i}' for i in range(1, 10)]
-    apartamentos_predefinidos = [f"Apartamento {i}0{j}" for i in range(1, 6) for j in range(1, 5)]
+    # Obter blocos únicos cadastrados
+    blocos = db.session.query(Morador.bloco).distinct().all()
+    blocos = [bloco[0] for bloco in blocos]  # Converter em lista simples
 
+    # Obter apartamentos cadastrados por bloco
+    apartamentos_por_bloco = {
+        bloco: db.session.query(Morador.apartamento).filter_by(bloco=bloco).distinct().all()
+        for bloco in blocos
+    }
+    # Converter os resultados para listas simples
+    _apartamentos_por_bloco = {bloco: [apt[0] for apt in apartamentos] for bloco, apartamentos in apartamentos_por_bloco.items()}
+
+    # Log para verificar o formato dos dados
+    print("Blocos disponíveis:", blocos)
+    print("Apartamentos por Bloco:", _apartamentos_por_bloco)
+
+    # Dados do formulário
     bloco_selecionado = request.form.get('bloco')
     apartamento_selecionado = request.form.get('apartamento')
-    print(f"bloco_selecionado: {bloco_selecionado}")
-    print(f"apartamento_selecionado: {apartamento_selecionado}")
-    _Morador = []
-    if request.method == 'POST':
-        _Morador = Morador.query.filter_by(bloco=bloco_selecionado, apartamento=apartamento_selecionado).all()
-        print(_Morador)
+
+    # Buscar moradores do bloco e apartamento selecionados
+    moradores = []
+    if bloco_selecionado and apartamento_selecionado:
+        moradores = Morador.query.filter_by(bloco=bloco_selecionado, apartamento=apartamento_selecionado).all()
+
     return render_template(
         'modificar.html',
-        blocos=blocos_predefinidos,
-        apartamentos=apartamentos_predefinidos,
-        Morador=_Morador,
+        blocos=blocos,
+        apartamentos_por_bloco=_apartamentos_por_bloco,
         bloco_selecionado=bloco_selecionado,
         apartamento_selecionado=apartamento_selecionado,
+        moradores=moradores,
         conectado=is_whatsapp_connected
     )
-
 
 @app.route('/atualizar_contatos', methods=['POST'])
 def atualizar_contatos():
@@ -218,10 +250,19 @@ def atualizar_contatos():
 # ========= Rota para Enviar Notificação ===========
 @app.route('/notificacao')
 def notificacao():
-    blocos_predefinidos = [f'Bloco {i}' for i in range(1, 10)]
-    apartamentos_predefinidos = [f"Apartamento {i}0{j}" for i in range(1, 6) for j in range(1, 5)]
-    return render_template('notificacao.html', blocos=blocos_predefinidos, apartamentos=apartamentos_predefinidos,
-                           conectado=is_whatsapp_connected)
+    # Obter blocos e apartamentos cadastrados
+    blocos = db.session.query(Morador.bloco).distinct().all()
+    blocos = [bloco[0] for bloco in blocos]  # Converter para lista simples
+    apartamentos_por_bloco = {
+        bloco: db.session.query(Morador.apartamento).filter_by(bloco=bloco).distinct().all()
+        for bloco in blocos
+    }
+    # Converter para um dicionário simples
+    apartamentos_por_bloco = {
+        bloco: [apt[0] for apt in apartamentos] for bloco, apartamentos in apartamentos_por_bloco.items()
+    }
+
+    return render_template('notificacao.html', blocos=blocos, apartamentos_por_bloco=apartamentos_por_bloco, conectado=is_whatsapp_connected)
 
 
 @app.route('/enviar_notificacao', methods=['POST'])
@@ -240,8 +281,6 @@ Informamos que há uma encomenda disponível para retirada na portaria.
 Agradecemos sua colaboração! 
 📍 _Portaria_
 """
-
-
     # Buscar contatos relacionados
     _Morador = Morador.query.filter_by(bloco=bloco, apartamento=apartamento).all()
     if not _Morador:
@@ -267,6 +306,54 @@ Agradecemos sua colaboração!
             flash(f"Erro ao enviar mensagem: {str(e)}")
             return redirect(url_for('mostrar_qr'))
     return redirect(url_for('notificacao'))
+
+@app.route('/enviar_notificacao_em_grupo', methods=['POST'])
+def enviar_notificacao_em_grupo():
+    destinatarios = request.form.getlist('destinatarios')
+
+    if not destinatarios:
+        flash("Por favor, selecione pelo menos um destinatário.")
+        return redirect(url_for('notificacao'))
+
+    for destinatario in destinatarios:
+        bloco, apartamento = destinatario.split('|')
+        mensagem_padrao = f"""📦 *Aviso Importante: Encomenda Disponível!*\n
+Prezado morador do *{bloco} - {apartamento}*,
+
+Informamos que há uma encomenda disponível para retirada na portaria.
+
+✅ *O que fazer?*
+- Por favor, compareça à portaria o mais breve possível para retirar sua encomenda.
+- Após a retirada, você pode enviar a palavra *_retirada_* nesta conversa para confirmar a retirada, ou solicitar ao porteiro que marque a encomenda como retirada no sistema.
+
+Agradecemos sua colaboração! 
+📍 _Portaria_
+"""
+        # Buscar moradores relacionados
+        moradores = Morador.query.filter_by(bloco=bloco, apartamento=apartamento).all()
+
+        if not moradores:
+            flash(f"Não há moradores cadastrados no {bloco} - {apartamento}.")
+            continue
+
+        # Enviar notificações para cada morador
+        for morador in moradores:
+            payload = {"contato": morador.contato, "mensagem": mensagem_padrao}
+            try:
+                resp = requests.post('http://localhost:3000/enviar-mensagem', json=payload)
+                if resp.status_code == 200:
+                    morador.ultima_notificacao = datetime.now()
+                    morador.encomenda_pendente = True
+                    db.session.commit()
+                else:
+                    flash(f"Erro ao enviar mensagem para {morador.contato}: {resp.text}")
+            except Exception as e:
+                flash(f"Erro ao enviar mensagem para {morador.contato}: {str(e)}")
+
+    flash("Notificações enviadas com sucesso!")
+    return redirect(url_for('notificacao'))
+
+
 
 
 @app.route('/remover-encomenda/<contato>', methods=['POST'])

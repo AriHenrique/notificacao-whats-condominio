@@ -1,5 +1,9 @@
 !define APP_NAME "NotificacaoEncomenda"
 !define INSTALL_DIR "C:\NotificacaoEncomenda"
+!define NODE_VERSION "18.16.0"
+!define PYTHON_VERSION "3.10.9"
+!define NODE_URL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-x64.msi"
+!define PYTHON_URL "https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-amd64.exe"
 
 Outfile "setup-${APP_NAME}.exe"
 InstallDir "${INSTALL_DIR}"
@@ -15,10 +19,21 @@ Section "Instalar Aplicação"
     DetailPrint "Criando diretório de instalação..."
     CreateDirectory "${INSTALL_DIR}"
 
+    ; Configurar o Back-End (Node.js)
+    DetailPrint "Baixando e instalando Node.js..."
+    SetOutPath "$TEMP"
+    ExecWait 'curl -o node-installer.msi ${NODE_URL}'
+    ExecWait 'msiexec /i node-installer.msi /passive /norestart'
+
     ; Copiar o Back-End (Node.js)
     DetailPrint "Copiando arquivos do Back-End..."
     SetOutPath "${INSTALL_DIR}\back"
     File /r "back\*"
+
+    ; Configurar o Front-End (Flask)
+    DetailPrint "Baixando e instalando Python..."
+    ExecWait 'curl -o python-installer.exe ${PYTHON_URL}'
+    ExecWait 'python-installer.exe /passive InstallAllUsers=1 PrependPath=1'
 
     ; Copiar o Front-End (Flask)
     DetailPrint "Copiando arquivos do Front-End..."

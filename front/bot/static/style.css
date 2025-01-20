@@ -1,10 +1,10 @@
-/* Estilo para o menu lateral */
+
 .sidebar {
-    height: 100vh; /* Altura total da janela */
-    width: 250px; /* Largura fixa do menu */
-    background-color: #0d6efd; /* Cor de fundo do menu */
+    height: 100vh;
+    width: 250px;
+    background-color: #0d6efd;
     padding: 15px;
-    position: fixed; /* Fixa o menu na lateral esquerda */
+    position: fixed;
     top: 0;
     left: 0;
     transition: all 0.3s ease-in-out;
@@ -34,21 +34,21 @@
     width: 100%;
 }
 
-/* Ajuste do conteúdo principal */
+
 .content {
-    margin-left: 270px; /* Espaço suficiente para o menu lateral */
+    margin-left: 270px;
     padding: 20px;
     transition: margin-left 0.3s ease-in-out;
 }
 
-/* Limita a largura máxima do container */
+
 .content-container {
-    max-width: 800px; /* Defina o tamanho máximo desejado */
-    margin: 0 auto; /* Centraliza o conteúdo horizontalmente */
-    padding: 20px; /* Adiciona espaçamento interno */
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
 }
 
-/* Botões dinâmicos */
+
 .btn-success {
     background-color: #28a745;
     color: #fff;
@@ -97,15 +97,65 @@
     border-color: rgba(255, 0, 0, 0.8);
 }
 
-/* Media queries para telas menores */
+
 @media (max-width: 768px) {
     .sidebar {
-        width: 100%; /* O menu ocupará toda a largura da tela */
-        height: auto; /* Ajusta a altura dinamicamente */
-        position: relative; /* Deixa de ser fixo */
+        width: 100%;
+        height: auto;
+        position: relative;
     }
 
     .content {
-        margin-left: 0; /* Remove o espaçamento lateral */
+        margin-left: 0;
     }
+}
+
+
+.form-check-input {
+    appearance: none;
+    border: 3px solid #007bff;
+    border-radius: 5px;
+    background-color: #f8f9fa;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+
+.form-check-input:checked {
+    background-color: #007bff;
+
+    box-shadow: 0 0 8px rgba(0, 123, 255, 0.5);
+}
+
+.form-check-label {
+    margin-left: 10px;
+    font-weight: bold;
+    font-size: 16px;
+    color: #212529;
+}
+
+
+.card {
+    background-color: #f9f9f9;
+    border: 1px solid #dee2e6;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+
+.card-title {
+    color: #0056b3;
+    font-weight: bold;
+}
+
+
+.card-text {
+    color: #6c757d;
 }

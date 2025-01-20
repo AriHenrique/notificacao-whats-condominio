@@ -5,7 +5,8 @@
 <form action="/remover" method="POST" class="border p-4 rounded shadow-sm">
     <div class="mb-3">
         <label for="bloco">Bloco:</label>
-        <select name="bloco" class="form-control form-control-sm" required>
+        <select id="bloco-select" name="bloco" class="form-control form-control-sm" required>
+            <option value="">Selecione um bloco</option>
             {% for bloco in blocos %}
             <option value="{{ bloco }}">{{ bloco }}</option>
             {% endfor %}
@@ -14,13 +15,30 @@
 
     <div class="mb-3">
         <label for="apartamento">Apartamento:</label>
-        <select name="apartamento" class="form-control form-control-sm" required>
-            {% for apt in apartamentos %}
-            <option value="{{ apt }}">{{ apt }}</option>
-            {% endfor %}
+        <select id="apartamento-select" name="apartamento" class="form-control form-control-sm" required>
+            <option value="">Selecione um apartamento</option>
         </select>
     </div>
 
     <button type="submit" class="btn btn-danger w-100 mt-3">Remover Todos os Contatos</button>
 </form>
+
+<script>
+    const apartamentosPorBloco = {{ apartamentos_por_bloco|tojson }};
+    const blocoSelect = document.getElementById('bloco-select');
+    const apartamentoSelect = document.getElementById('apartamento-select');
+
+    blocoSelect.addEventListener('change', function () {
+        const bloco = this.value;
+        apartamentoSelect.innerHTML = '<option value="">Selecione um apartamento</option>';
+        if (bloco && apartamentosPorBloco[bloco]) {
+            apartamentosPorBloco[bloco].forEach(function (apt) {
+                const option = document.createElement('option');
+                option.value = apt;
+                option.textContent = apt;
+                apartamentoSelect.appendChild(option);
+            });
+        }
+    });
+</script>
 {% endblock %}
