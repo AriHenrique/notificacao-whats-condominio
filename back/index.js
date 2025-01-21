@@ -68,11 +68,11 @@ function setupClientEventHandlers(client) {
                         await client.sendText(message.from, "Obrigado! A encomenda foi registrada como retirada no sistema.");
                     } else {
                         const errorMsg = await response.json();
-                        await client.sendText(message.from, `Erro ao processar a retirada: ${errorMsg.error || 'Erro desconhecido.'}`);
+                        await client.sendText(message.from, `${errorMsg.error || 'Erro desconhecido.'}`);
                     }
                 } catch (error) {
                     console.error('Erro ao enviar solicitação ao Flask:', error);
-                    await client.sendText(message.from, 'Erro interno. Não foi possível processar sua retirada.');
+                    await client.sendText(message.from, 'Não foi possível processar sua retirada.');
                 }
             }
             // Caso o morador envie "cadastrar"
@@ -112,6 +112,9 @@ Para se cadastrar, digite a palavra *cadastrar* seguida do número do bloco e ap
 Digite: *cadastrar 1-101*`
                     );
                 }
+            }
+            else {
+                await client.sendText(message.from, "comandos aceitos: \n- cadastrar\n- retirada\n\nDigite *cadastrar* para cadastrar um morador, ou *retirada* para informar que a encomenda foi retirada.");
             }
         } catch (error) {
             console.error('Erro no processamento da mensagem:', error);
