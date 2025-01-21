@@ -259,7 +259,8 @@ def notificacao():
     }
     # Converter para um dicionário simples
     apartamentos_por_bloco = {
-        bloco: [apt[0] for apt in apartamentos] for bloco, apartamentos in apartamentos_por_bloco.items()
+        bloco: sorted([apt[0] for apt in db.session.query(Morador.apartamento).filter_by(bloco=bloco).distinct().all()])
+        for bloco in blocos
     }
 
     return render_template('notificacao.html', blocos=blocos, apartamentos_por_bloco=apartamentos_por_bloco, conectado=is_whatsapp_connected)

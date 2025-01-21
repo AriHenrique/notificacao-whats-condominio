@@ -97,11 +97,9 @@ function setupClientEventHandlers(client) {
                             await client.sendText(message.from, `${bloco}, ${apartamento}\n\nCadastrado com sucesso!`);
                         } else {
                             const errorMsg = await response.json();
-                            await client.sendText(message.from, `${errorMsg.error || 'Erro desconhecido.'}`);
                         }
                     } catch (error) {
                         console.error('Erro ao enviar solicitação ao Flask:', error);
-                        await client.sendText(message.from, 'Erro interno. Não foi possível realizar o cadastro.');
                     }
                 } else {
                     await client.sendText(
@@ -117,8 +115,7 @@ Digite: *cadastrar 1-101*`
                 await client.sendText(message.from, "comandos aceitos: \n- cadastrar\n- retirada\n\nDigite *cadastrar* para cadastrar um morador, ou *retirada* para informar que a encomenda foi retirada.");
             }
         } catch (error) {
-            console.error('Erro no processamento da mensagem:', error);
-            await client.sendText(message.from, 'Erro ao processar sua mensagem. Tente novamente mais tarde.');
+            console.error(`Erro no processamento da mensagem: ${message.from}`, error);
         }
     });
 }
