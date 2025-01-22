@@ -10,12 +10,12 @@
         <th>Bloco</th>
         <th>Apartamento</th>
         <th>Última Notificação</th>
+        <th>Responsável</th>
         <th>Ações</th>
     </tr>
     </thead>
     <tbody>
     {% for morador in moradores %}
-    {% if morador.encomenda_pendente %}
     <tr>
         <td>{{ morador.bloco }}</td>
         <td>{{ morador.apartamento }}</td>
@@ -27,12 +27,14 @@
             {% endif %}
         </td>
         <td>
-            <form action="/remover-encomenda-porteiro/{{ morador.id }}" method="POST" style="display:inline;">
-                <button type="submit" class="btn btn-danger btn-sm">Marcar como Retirada</button>
+            <form action="/remover-encomenda-porteiro/{{ morador.bloco }}/{{ morador.apartamento }}" method="POST" style="display:inline;">
+                <input type="text" name="observacao" class="form-control form-control-sm" placeholder="Nome do responsável" required>
+        </td>
+        <td>
+            <button type="submit" class="btn btn-danger btn-sm">Marcar como Retirada</button>
             </form>
         </td>
     </tr>
-    {% endif %}
     {% endfor %}
     </tbody>
 </table>
