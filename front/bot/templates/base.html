@@ -47,5 +47,20 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function checkWhatsAppStatus() {
+        fetch('/whatsapp-status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.connected) {
+                    //
+                }
+            })
+            .catch(error => {
+                console.error("Erro ao verificar o status do WhatsApp:", error);
+            });
+    }
+    setInterval(checkWhatsAppStatus, 1000);
+</script>
 </body>
 </html>

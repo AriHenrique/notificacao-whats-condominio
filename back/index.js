@@ -7,14 +7,54 @@ app.use(bodyParser.json());
 
 let qrCodeData = null;
 let clientInstance = null;
+let isInitializing = false; // Controle para evitar múltiplas inicializações
+let lastConnectionState = null; // Armazena o último estado para evitar loops de reconexão
+
+function monitorClientConnection(client) {
+    if (isInitializing) {
+        return;
+    }
+    client.onStateChange((state) => {
+        console.log('Estado do cliente mudou para:', state);
+        lastConnectionState = state;
+
+        if (state === 'CONFLICT' || state === 'UNPAIRED' || state === 'UNLAUNCHED') {
+            console.log('Tentando recuperar conexão...');
+            client.useHere(); // Recupera a sessão em caso de conflito
+        }
+
+        if (state === 'DISCONNECTED' && !isInitializing) {
+            console.log('Cliente desconectado. Tentando reconectar...');
+        }
+    });
+
+    // Verifica o estado periodicamente
+    setInterval(async () => {
+        if (isInitializing) {
+            console.log('Inicialização em andamento. Ignorando verificação de estado.');
+            return;
+        }
+
+        try {
+            const state = await client.getConnectionState();
+            if (state !== 'CONNECTED' && lastConnectionState !== state) {
+                console.log(`Conexão perdida (estado: ${state}). Tentando reconectar...`);
+            }
+        } catch (error) {
+            console.error('Erro ao verificar o estado da conexão:', error);
+        }
+    }, 30000); // Verifica a cada 30 segundos
+}
+
 
 function initializeVenomBot() {
     console.log('Iniciando o Venom-Bot...');
+
     venom
         .create(
             {
                 session: 'sessionName',
-                headless: 'new', // Utilize 'new' para o novo modo headless ou false para modo não headless
+                // headless: 'new',
                 browserArgs: ['--no-sandbox', '--disable-setuid-sandbox'],
             },
             (base64Qr, asciiQR) => {
@@ -27,15 +67,20 @@ function initializeVenomBot() {
         .then((client) => {
             clientInstance = client;
             console.log('WhatsApp está pronto para enviar mensagens!');
-            qrCodeData = null
+            qrCodeData = null;
             setupClientEventHandlers(client);
+            monitorClientConnection(client); // Adiciona o monitoramento do cliente
         })
         .catch((error) => {
             console.error('Erro ao inicializar o Venom-Bot:', error);
-            console.log('Tentando reiniciar o Venom-Bot em 5 segundos...');
-            setTimeout(initializeVenomBot, 5000);
+            console.log('Tentando reiniciar o Venom-Bot em 15 segundos...');
+            setTimeout(initializeVenomBot, 15000);
+        })
+        .finally(() => {
+            isInitializing = false; // Libera a inicialização
         });
 }
+
 
 function setupClientEventHandlers(client) {
     client.onStateChange((state) => {
@@ -120,8 +165,53 @@ Digite: *cadastrar 1-101*`
     });
 }
 
-// Iniciar o Venom-Bot
+async function enviarComTimeout(clientInstance, contato, mensagem, timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            reject(new Error('Timeout no envio da mensagem.'));
+        }, timeoutMs);
+
+        clientInstance.sendText(`55${contato}@c.us`, mensagem)
+            .then((result) => {
+                clearTimeout(timeout);
+                resolve(result);
+            })
+            .catch((error) => {
+                clearTimeout(timeout);
+                reject(error);
+            });
+    });
+}
+
 initializeVenomBot();
+
+app.get('/health', async (req, res) => {
+    if (!clientInstance) {
+        return res.status(500).json({ status: 'error', message: 'Cliente não inicializado.' });
+    }
+
+    try {
+        const state = await clientInstance.getConnectionState();
+        const isConnected = state === 'CONNECTED';
+
+        if (!isConnected) {
+            console.log('Cliente desconectado. Tentando reconectar...');
+        }
+
+        res.status(200).json({
+            status: 'success',
+            clientState: state,
+            isConnected,
+            message: isConnected
+                ? 'O cliente está conectado e funcionando normalmente.'
+                : 'O cliente não está conectado. Tentando reconectar.',
+        });
+    } catch (error) {
+        console.error('Erro ao verificar o estado do cliente:', error);
+        res.status(500).json({ status: 'error', message: 'Erro ao verificar o estado do cliente.' });
+    }
+});
+
 
 app.get('/qr-code', (req, res) => {
     if (qrCodeData) {
@@ -131,9 +221,9 @@ app.get('/qr-code', (req, res) => {
     }
 });
 
+
 app.post('/enviar-mensagem', async (req, res) => {
     const { contato, mensagem } = req.body;
-
     if (!contato || !mensagem) {
         return res.status(400).send('Faltam informações.');
     }
@@ -143,10 +233,11 @@ app.post('/enviar-mensagem', async (req, res) => {
     }
 
     try {
-        await clientInstance.sendText(`55${contato}@c.us`, mensagem);
+        await enviarComTimeout(clientInstance, contato, mensagem, 15000);
         res.status(200).send(`Mensagem enviada para ${contato}`);
     } catch (error) {
-        res.status(500).send('Erro ao enviar mensagem: ' + error.message);
+        console.error(`[ERRO] Falha ao enviar mensagem para ${contato}: ${error}`);
+        res.status(500).send('Erro ao enviar mensagem: ' + error);
     }
 });
 

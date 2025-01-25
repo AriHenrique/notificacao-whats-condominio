@@ -46,20 +46,39 @@ with app.app_context():
     db.create_all()
 
 
+# def verificar_envio_periodico():
+#     global is_whatsapp_connected
+#     try:
+#         payload = {
+#             "contato": "3184787489",
+#             "mensagem": "Mensagem de teste para verificar conexão com WhatsApp."
+#         }
+#         response = requests.post('http://localhost:3000/enviar-mensagem', json=payload)
+#         if response.status_code == 200:
+#             is_whatsapp_connected = True
+#             print("[INFO] WhatsApp conectado e envio funcionando.")
+#         else:
+#             is_whatsapp_connected = False
+#             print(f"[ERRO] Envio falhou: {response.text}")
+#     except requests.exceptions.RequestException as e:
+#         print(f"[ERRO] Não foi possível conectar ao WhatsApp: {str(e)}")
+#     return is_whatsapp_connected
+
 def update_whatsapp_status():
     global is_whatsapp_connected
     try:
         time.sleep(5)
-        response = requests.get('http://localhost:3000/qr-code', timeout=5)
-        qr_code_html = response.text
-        is_whatsapp_connected = qr_code_html == 'Nenhum QR Code disponível no momento.'
+        response = requests.get('http://localhost:3000/health')
+        is_whatsapp_connected = response.status_code == 200
     except requests.exceptions.RequestException:
         is_whatsapp_connected = False
+    return is_whatsapp_connected
 
 
 @app.route('/whatsapp-status', methods=['GET'])
 def whatsapp_status():
-    update_whatsapp_status()
+    if not update_whatsapp_status():
+        return redirect(url_for('mostrar_qr'))
     return {'connected': is_whatsapp_connected}
 
 
@@ -98,6 +117,8 @@ def mostrar_qr():
         if qr_code_html == 'Nenhum QR Code disponível no momento.':
             is_whatsapp_connected = True
             return redirect(url_for('notificacao'))
+        else:
+            is_whatsapp_connected = False
     except requests.exceptions.RequestException:
         qr_code_html = "<p>Erro ao conectar com o servidor Node.js. Certifique-se de que está rodando.</p>"
     return render_template('qr_display.html', qr_code_html=qr_code_html, conectado=is_whatsapp_connected)
@@ -309,10 +330,13 @@ Agradecemos sua colaboração!
         return redirect(url_for('notificacao'))
     contatos_enviados = str()
     for morador in _Morador:
+        print(morador.contato)
         payload = {"contato": morador.contato, "mensagem": mensagem_padrao}
         try:
             resp = requests.post('http://localhost:3000/enviar-mensagem', json=payload)
+            print(resp.status_code)
             if resp.status_code == 500:
+                is_whatsapp_connected = False
                 return redirect(url_for('mostrar_qr'))
             elif resp.status_code == 200:
                 is_whatsapp_connected = True
@@ -322,7 +346,9 @@ Agradecemos sua colaboração!
                 flash(f"Mensagem enviada para {bloco} - {apartamento}")
                 contatos_enviados += morador.contato + '\n'
             else:
+                is_whatsapp_connected = False
                 flash(f"Erro ao enviar mensagem: {resp.text}")
+                return redirect(url_for('mostrar_qr'))
         except Exception as e:
             flash(f"Erro ao enviar mensagem: {str(e)}")
             return redirect(url_for('mostrar_qr'))
@@ -379,10 +405,15 @@ Agradecemos sua colaboração!
                     morador.encomenda_pendente = True
                     db.session.commit()
                     contatos_enviados += morador.contato + '\n'
+                    time.sleep(2)
                 else:
-                    flash(f"Erro ao enviar mensagem para {morador.contato}: {resp.text}")
+                    is_whatsapp_connected = False
+                    flash(f"Erro ao enviar mensagem para {morador.contato}: {bloco} - {apartamento}")
+                    return redirect(url_for('mostrar_qr'))
             except Exception as e:
-                flash(f"Erro ao enviar mensagem para {morador.contato}: {str(e)}")
+                flash(f"Erro ao enviar mensagem para {morador.contato}: {bloco} - {apartamento}")
+                return redirect(url_for('mostrar_qr'))
+        flash(f"Mensagem enviada para {bloco} - {apartamento}")
         registro = HistoricoRegistro(
             tipo="Envio",
             bloco=bloco,
@@ -581,8 +612,6 @@ def exportar_historico():
 
 # ========= Iniciar o Servidor ===========
 if __name__ == '__main__':
-    caminho_pasta = Path("C:/NotificacaoEncomenda/back/tokens")
-    if caminho_pasta.exists() and caminho_pasta.is_dir():
-        status_thread = threading.Thread(target=update_whatsapp_status, daemon=True)
-        status_thread.start()
+    status_thread = threading.Thread(target=update_whatsapp_status, daemon=True)
+    status_thread.start()
     app.run(debug=True)
