@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_sqlalchemy import SQLAlchemy
-from pathlib import Path
 import requests
 import time
 import os
@@ -9,7 +8,6 @@ import psutil
 import threading
 from datetime import datetime, timedelta, timezone
 import io
-import csv
 from openpyxl import Workbook
 
 app = Flask(__name__)
@@ -518,7 +516,10 @@ def remover_encomenda_porteiro(bloco, apartamento):
         for morador in moradores_no_apartamento:
             morador.encomenda_pendente = False
             contatos_list += morador.contato + "\n"
-
+            payload = {"contato": morador.contato, "mensagem": f"A encomenda foi registrada como retirada pela portaria\n"
+                                                               f"\n🔹 observação: *{observacao}*"
+                                                               f"\n🔹 informação da encomenda: *{informacoes}*"}
+            resp = requests.post('http://localhost:3000/enviar-mensagem', json=payload)
         registro = HistoricoRegistro(
             tipo="Retirada",
             bloco=bloco,
@@ -538,6 +539,7 @@ def remover_encomenda_porteiro(bloco, apartamento):
 
 @app.route('/historico-envios-e-retiradas', methods=['GET', 'POST'])
 def historico_envios_e_retiradas():
+    global dt_fim
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     bloco = request.args.get('bloco')
@@ -625,8 +627,6 @@ def exportar_historico():
     registrado_por = request.args.get('registrado_por')
 
     query = HistoricoRegistro.query
-
-    # Filtros
     if data_inicio:
         query = query.filter(HistoricoRegistro.data_registro >= datetime.strptime(data_inicio, '%Y-%m-%d'))
     if data_fim:
