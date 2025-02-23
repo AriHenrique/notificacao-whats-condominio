@@ -65,7 +65,7 @@ def reiniciar_servidores():
 
 if __name__ == "__main__":
     if verificar_atualizacao():
-        print('atualizando')
+        print('atualizando sistema')
         encerrar_processos()
         reiniciar_servidores()
     else:
