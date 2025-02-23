@@ -62,7 +62,7 @@ function initializeVenomBot() {
                 console.log('QR Code gerado, pronto para escaneamento!');
             },
             undefined,
-            { logQR: false }
+            {logQR: false}
         )
         .then((client) => {
             clientInstance = client;
@@ -108,26 +108,24 @@ function setupClientEventHandlers(client) {
                             'Content-Type': 'application/json',
                         },
                     });
-
-                    if (response.ok) {
+                    if (response.status === 200) {
                         await client.sendText(message.from, "Obrigado! A encomenda foi registrada como retirada no sistema.");
+                        await client.deleteChat(message.from);
                     } else {
                         const errorMsg = await response.json();
-                        await client.sendText(message.from, `${errorMsg.error || 'Erro desconhecido.'}`);
                     }
                 } catch (error) {
                     console.error('Erro ao enviar solicitação ao Flask:', error);
                     await client.sendText(message.from, 'Não foi possível processar sua retirada.');
+                    await client.deleteChat(message.from);
                 }
-            }
-            // Caso o morador envie "cadastrar"
-            else if (message.body.toLowerCase().startsWith("cadastrar")) {
+            } else if (message.body.toLowerCase().startsWith("cadastrar")) {
                 const regex = /cadastrar\s+(\d+)-(\d+)/i;
                 const correspondencia = message.body.toLowerCase().match(regex);
                 if (correspondencia) {
-                    const bloco = 'Bloco ' + correspondencia[1];
-                    const apartamento = 'Apartamento ' + correspondencia[2];
-                    console.log(JSON.stringify({ bloco, apartamento, contato }));
+                    const bloco = 'Bloco ' + parseInt(correspondencia[1], 10).toString();
+                    const apartamento = 'Apartamento ' + parseInt(correspondencia[2], 10).toString();
+                    console.log(JSON.stringify({bloco, apartamento, contato}));
 
                     try {
                         const response = await fetch('http://127.0.0.1:5000/adicionar', {
@@ -135,11 +133,12 @@ function setupClientEventHandlers(client) {
                             headers: {
                                 'Content-Type': 'application/json',
                             },
-                            body: JSON.stringify({ bloco, apartamento, contato }),
+                            body: JSON.stringify({bloco, apartamento, contato}),
                         });
 
                         if (response.ok) {
                             await client.sendText(message.from, `${bloco}, ${apartamento}\n\nCadastrado com sucesso!`);
+                            await client.deleteChat(message.from);
                         } else {
                             const errorMsg = await response.json();
                         }
@@ -154,10 +153,11 @@ Para se cadastrar, digite a palavra *cadastrar* seguida do número do bloco e ap
 🔹 *Exemplo*: 
 Digite: *cadastrar 1-101*`
                     );
+                    await client.deleteChat(message.from);
                 }
-            }
-            else {
+            } else {
                 await client.sendText(message.from, "comandos aceitos: \n- cadastrar\n- retirada\n\nDigite *cadastrar* para cadastrar um morador, ou *retirada* para informar que a encomenda foi retirada.");
+                await client.deleteChat(message.from);
             }
         } catch (error) {
             console.error(`Erro no processamento da mensagem: ${message.from}`, error);
@@ -166,7 +166,7 @@ Digite: *cadastrar 1-101*`
 }
 
 async function enviarComTimeout(clientInstance, contato, mensagem, timeoutMs = 15000) {
-    return new Promise((resolve, reject) => {
+    await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             reject(new Error('Timeout no envio da mensagem.'));
         }, timeoutMs);
@@ -181,13 +181,14 @@ async function enviarComTimeout(clientInstance, contato, mensagem, timeoutMs = 1
                 reject(error);
             });
     });
+    await clientInstance.deleteChat(`55${contato}@c.us`);
 }
 
 initializeVenomBot();
 
 app.get('/health', async (req, res) => {
     if (!clientInstance) {
-        return res.status(500).json({ status: 'error', message: 'Cliente não inicializado.' });
+        return res.status(500).json({status: 'error', message: 'Cliente não inicializado.'});
     }
 
     try {
@@ -208,7 +209,7 @@ app.get('/health', async (req, res) => {
         });
     } catch (error) {
         console.error('Erro ao verificar o estado do cliente:', error);
-        res.status(500).json({ status: 'error', message: 'Erro ao verificar o estado do cliente.' });
+        res.status(500).json({status: 'error', message: 'Erro ao verificar o estado do cliente.'});
     }
 });
 
@@ -223,7 +224,7 @@ app.get('/qr-code', (req, res) => {
 
 
 app.post('/enviar-mensagem', async (req, res) => {
-    const { contato, mensagem } = req.body;
+    const {contato, mensagem} = req.body;
     if (!contato || !mensagem) {
         return res.status(400).send('Faltam informações.');
     }
@@ -235,6 +236,8 @@ app.post('/enviar-mensagem', async (req, res) => {
     try {
         await enviarComTimeout(clientInstance, contato, mensagem, 15000);
         res.status(200).send(`Mensagem enviada para ${contato}`);
+
+
     } catch (error) {
         console.error(`[ERRO] Falha ao enviar mensagem para ${contato}: ${error}`);
         res.status(500).send('Erro ao enviar mensagem: ' + error);

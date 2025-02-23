@@ -5,101 +5,87 @@
 {% block content %}
 <h2 class="text-center mb-4">Histórico de Envios e Retiradas</h2>
 
-<!-- Formulário de Filtros -->
 <form method="get" action="{{ url_for('historico_envios_e_retiradas') }}" class="mb-4" style="font-size: 0.9rem;">
     <div class="row">
         <div class="col-md-3">
             <label for="data_inicio">Data Início:</label>
             <input type="date" id="data_inicio" name="data_inicio" class="form-control form-control-sm"
-                   value="{{ request.args.get('data_inicio', '') }}" style="width: 100%;">
+                   value="{{ request.args.get('data_inicio', '') }}">
         </div>
         <div class="col-md-3">
             <label for="data_fim">Data Fim:</label>
             <input type="date" id="data_fim" name="data_fim" class="form-control form-control-sm"
-                   value="{{ request.args.get('data_fim', '') }}" style="width: 100%;">
+                   value="{{ request.args.get('data_fim', '') }}">
         </div>
-        <div class="col-md-2">
-            <label for="tipo">Tipo:</label>
-            <select id="tipo" name="tipo" class="form-control form-control-sm">
-                <option value="">Todos</option>
-                <option value="Envio" {% if request.args.get('tipo') == 'Envio' %}selected{% endif %}>Envio</option>
-                <option value="Retirada" {% if request.args.get('tipo') == 'Retirada' %}selected{% endif %}>Retirada</option>
-            </select>
-        </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <label for="bloco">Bloco:</label>
             <select id="bloco" name="bloco" class="form-control form-control-sm">
                 <option value="">Todos</option>
-                {% for bloco in blocos %}
-                <option value="{{ bloco }}" {% if request.args.get('bloco') == bloco %}selected{% endif %}>{{ bloco }}</option>
+                {% for b in blocos %}
+                <option value="{{ b }}" {% if request.args.get(
+                'bloco') == b %}selected{% endif %}>{{ b }}</option>
                 {% endfor %}
             </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <label for="apartamento">Apartamento:</label>
             <select id="apartamento" name="apartamento" class="form-control form-control-sm">
                 <option value="">Todos</option>
-                {% for apt in apartamentos %}
-                <option value="{{ apt }}" {% if request.args.get('apartamento') == apt %}selected{% endif %}>{{ apt }}</option>
+                {% for a in apartamentos %}
+                <option value="{{ a }}" {% if request.args.get(
+                'apartamento') == a %}selected{% endif %}>{{ a }}</option>
                 {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-2">
-            <label for="registrado_por">Registrado Por:</label>
-            <select id="registrado_por" name="registrado_por" class="form-control form-control-sm">
-                <option value="">Todos</option>
-                <option value="Porteiro" {% if request.args.get('registrado_por') == 'Porteiro' %}selected{% endif %}>Porteiro</option>
-                <option value="Sistema" {% if request.args.get('registrado_por') == 'Sistema' %}selected{% endif %}>Sistema</option>
-                <option value="Usuário (WhatsApp)" {% if request.args.get('registrado_por') == 'Usuário (WhatsApp)' %}selected{% endif %}>Usuário (WhatsApp)</option>
             </select>
         </div>
     </div>
     <div class="d-flex justify-content-between mt-3">
         <button type="submit" class="btn btn-primary">Filtrar</button>
+        <a href="#" id="export-csv" class="btn btn-success">Exportar Excel</a>
     </div>
 </form>
 
-<!-- Botão de Exportação em Novo Bloco -->
-<div class="d-flex justify-content-start mb-3">
-    <form method="get" action="{{ url_for('exportar_historico') }}">
-        <input type="hidden" name="data_inicio" value="{{ request.args.get('data_inicio', '') }}">
-        <input type="hidden" name="data_fim" value="{{ request.args.get('data_fim', '') }}">
-        <input type="hidden" name="tipo" value="{{ request.args.get('tipo', '') }}">
-        <input type="hidden" name="bloco" value="{{ request.args.get('bloco', '') }}">
-        <input type="hidden" name="apartamento" value="{{ request.args.get('apartamento', '') }}">
-        <input type="hidden" name="registrado_por" value="{{ request.args.get('registrado_por', '') }}">
-        <button type="submit" class="btn btn-success">Exportar como CSV</button>
-    </form>
-</div>
-
-<!-- Tabela de Resultados -->
 <table class="table table-bordered table-striped" style="font-size: 0.9rem;">
     <thead class="table-primary">
     <tr>
-        <th>Data</th>
-        <th>Tipo</th>
+        <th>Data de Entrada</th>
+        <th>Data de Saída</th>
         <th>Bloco</th>
         <th>Apartamento</th>
-        <th>Contato</th>
-        <th>Mensagem</th>
-        <th>Registrado Por</th>
         <th>Observação</th>
     </tr>
     </thead>
     <tbody>
-    {% for registro in registros %}
+    {% for row in rows %}
     <tr>
-        <td>{{ registro.data_registro.strftime('%d/%m/%Y %H:%M') }}</td>
-        <td>{{ registro.tipo }}</td>
-        <td>{{ registro.bloco }}</td>
-        <td>{{ registro.apartamento }}</td>
-        <td>{{ registro.contato or "N/A" }}</td>
-        <td>{{ registro.mensagem }}</td>
-        <td>{{ registro.registrado_por }}</td>
-        <td>{{ registro.observacao or "N/A" }}</td>
+        <td>
+            {% if row.data_entrada %}
+            {{ row.data_entrada.strftime('%d/%m/%Y %H:%M') }}
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        <td>
+            {% if row.data_saida %}
+            {{ row.data_saida.strftime('%d/%m/%Y %H:%M') }}
+            {% else %}
+            -
+            {% endif %}
+        </td>
+        <td>{{ row.bloco }}</td>
+        <td>{{ row.apartamento }}</td>
+        <td>{{ row.observacao or 'N/A' }}</td>
     </tr>
     {% endfor %}
     </tbody>
 </table>
 
+
+<script>
+    document.getElementById("export-csv").addEventListener("click", function (event) {
+        event.preventDefault();
+        let url = "{{ url_for('exportar_historico') }}";
+        let params = new URLSearchParams(new FormData(document.querySelector("form")));
+        window.location.href = url + "?" + params.toString();
+    });
+</script>
 {% endblock %}

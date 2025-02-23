@@ -17,6 +17,11 @@
     <!-- Envio Individual -->
     <div class="tab-pane fade show active" id="individual">
         <form action="/enviar_notificacao" method="POST" class="border p-4 rounded shadow-sm">
+            <!-- Checkbox para marcar se a notificação é de um delivery -->
+            <div class="form-check mb-3">
+                <input type="checkbox" class="form-check-input" id="delivery" name="delivery">
+                <label class="form-check-label" for="delivery">🛵🍕🏪📦 Esta notificação é para um delivery</label>
+            </div>
             <div class="mb-3">
                 <label for="bloco">Bloco:</label>
                 <select id="bloco-select" name="bloco" class="form-control form-control-sm" required>
@@ -33,6 +38,7 @@
                     <option value="">Selecione um apartamento</option>
                 </select>
             </div>
+
 
             <button type="submit" class="btn btn-primary w-100 mt-3">Enviar Notificação</button>
         </form>
@@ -68,6 +74,11 @@
     <!-- Envio em Grupo -->
     <div class="tab-pane fade" id="grupo">
         <form action="/enviar_notificacao_em_grupo" method="POST" class="border p-4 rounded shadow-sm">
+            <!-- Checkbox para marcar se todas as notificações são de delivery -->
+            <div class="form-check mb-3">
+                <input type="checkbox" class="form-check-input" id="delivery-group" name="delivery">
+                <label class="form-check-label" for="delivery-group">🛵🍕🏪📦 Estas notificações são para um delivery</label>
+            </div>
             <div class="row">
                 <!-- Renderizar apenas blocos cadastrados -->
                 {% for bloco, apartamentos in apartamentos_por_bloco.items() %}
@@ -92,9 +103,9 @@
                 {% endfor %}
             </div>
 
+
             <button type="submit" class="btn btn-primary w-100 mt-3">Enviar Notificações</button>
         </form>
     </div>
 </div>
 {% endblock %}
-

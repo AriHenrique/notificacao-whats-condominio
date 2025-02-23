@@ -10,7 +10,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 import io
 import csv
-
+from openpyxl import Workbook
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
@@ -18,6 +18,31 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///Morador.db'
 db = SQLAlchemy(app)
 is_whatsapp_connected = False
 cadastro_ativo_via_mensagem = False
+
+MENSAGEM_DELIVERY = """🚨 *Aviso: 🛵🍕🏪📦 Delivery aguardando na portaria!*\n
+Prezado morador do *{} - {}*,
+
+O entregador tentou contato pelo interfone, mas não conseguiu falar com você. Seu pedido está aguardando retirada na portaria.
+
+📢 *O que fazer?*
+- Dirija-se à portaria o mais rápido possível para retirar seu pedido.
+- Caso precise de mais informações, entre em contato com a portaria.
+
+Agradecemos sua atenção!  
+📍 _Portaria_
+"""
+MENSAGEM_ENCOMENDA = """📦 *Aviso Importante: Encomenda Disponível!*\n
+Prezado morador do *{} - {}*,
+
+Informamos que há uma encomenda disponível para retirada na portaria.
+
+✅ *O que fazer?*
+- Por favor, compareça à portaria o mais breve possível para retirar sua encomenda.
+- Após a retirada, você pode enviar a palavra *_retirada_* nesta conversa para confirmar a retirada, ou solicitar ao porteiro que marque a encomenda como retirada no sistema.
+
+Agradecemos sua colaboração! 
+📍 _Portaria_
+"""
 
 
 class Morador(db.Model):
@@ -41,28 +66,9 @@ class HistoricoRegistro(db.Model):
     observacao = db.Column(db.Text, nullable=True)
 
 
-# Criação do banco de dados
 with app.app_context():
     db.create_all()
 
-
-# def verificar_envio_periodico():
-#     global is_whatsapp_connected
-#     try:
-#         payload = {
-#             "contato": "3184787489",
-#             "mensagem": "Mensagem de teste para verificar conexão com WhatsApp."
-#         }
-#         response = requests.post('http://localhost:3000/enviar-mensagem', json=payload)
-#         if response.status_code == 200:
-#             is_whatsapp_connected = True
-#             print("[INFO] WhatsApp conectado e envio funcionando.")
-#         else:
-#             is_whatsapp_connected = False
-#             print(f"[ERRO] Envio falhou: {response.text}")
-#     except requests.exceptions.RequestException as e:
-#         print(f"[ERRO] Não foi possível conectar ao WhatsApp: {str(e)}")
-#     return is_whatsapp_connected
 
 def update_whatsapp_status():
     global is_whatsapp_connected
@@ -126,14 +132,43 @@ def mostrar_qr():
 
 @app.route('/historico-notificacoes')
 def historico_notificacoes():
-    moradores = Morador.query.filter_by(encomenda_pendente=True).all()
-    blocos_apartamentos = {
-        (morador.bloco, morador.apartamento): morador for morador in moradores
-    }
+    # Buscar todos os moradores com encomendas pendentes
+    moradores_pendentes = Morador.query.filter_by(encomenda_pendente=True).order_by(
+        Morador.bloco.asc(), Morador.apartamento.asc()
+    ).all()
+
+    # Criar um dicionário para armazenar os moradores únicos (chave: bloco + apartamento)
+    blocos_apartamentos = {}
+    for morador in moradores_pendentes:
+        blocos_apartamentos[(morador.bloco, morador.apartamento)] = morador
+
+    # Converter para lista de moradores únicos
     moradores_unicos = list(blocos_apartamentos.values())
 
+    # Buscar informações preenchidas no HistoricoRegistro
+    registros = HistoricoRegistro.query.filter_by(tipo="Envio").order_by(
+        HistoricoRegistro.data_registro.desc()
+    ).all()
+
+    # Criar um dicionário para armazenar as informações preenchidas no HistoricoRegistro
+    historico_por_morador = {}
+    for registro in registros:
+        chave = (registro.bloco, registro.apartamento)
+        if chave not in historico_por_morador:
+            historico_por_morador[chave] = registro
+
+    # Preencher os dados do historico dentro da lista de moradores
+    for morador in moradores_unicos:
+        chave = (morador.bloco, morador.apartamento)
+        if chave in historico_por_morador:
+            registro = historico_por_morador[chave]
+            morador.informacoes = registro.observacao  # Adiciona a informação preenchida
+
     return render_template(
-        'historico_notificacoes.html', moradores=moradores_unicos, conectado=is_whatsapp_connected
+        'historico_notificacoes.html',
+        moradores=moradores_unicos,
+        registros=registros,
+        conectado=is_whatsapp_connected
     )
 
 
@@ -205,7 +240,6 @@ def adicionar_morador():
             return redirect(url_for('cadastro'))
 
 
-# ========= Rota para Remover Morador ===========
 @app.route('/remover', methods=['GET', 'POST'])
 def remover_morador():
     # Obter blocos e apartamentos cadastrados
@@ -238,7 +272,6 @@ def remover_morador():
     )
 
 
-# ========= Rota para Modificar Contatos ===========
 @app.route('/modificar', methods=['GET', 'POST'])
 def modificar_contatos():
     blocos = db.session.query(Morador.bloco).distinct().all()
@@ -289,11 +322,33 @@ def atualizar_contatos():
     return redirect(url_for('modificar_contatos'))
 
 
+@app.route('/salvar-informacoes-encomenda', methods=['POST'])
+def salvar_informacoes_encomenda():
+    data = request.get_json()
+    registros = data.get("dados")
+
+    if not registros:
+        return jsonify({"success": False, "error": "Nenhuma informação recebida"}), 400
+
+    for item in registros:
+        bloco = item.get("bloco")
+        apartamento = item.get("apartamento")
+        informacoes = item.get("informacoes")
+        registro = HistoricoRegistro.query.filter_by(bloco=bloco, apartamento=apartamento, tipo="Envio") \
+            .order_by(HistoricoRegistro.data_registro.desc()).first()
+
+        if registro:
+            registro.observacao = informacoes
+
+    db.session.commit()
+    return jsonify({"success": True})
+
+
 # ========= Rota para Enviar Notificação ===========
 @app.route('/notificacao')
 def notificacao():
     blocos = db.session.query(Morador.bloco).distinct().all()
-    blocos = [bloco[0] for bloco in blocos]
+    blocos = sorted([bloco[0] for bloco in blocos])
     apartamentos_por_bloco = {
         bloco: db.session.query(Morador.apartamento).filter_by(bloco=bloco).distinct().all()
         for bloco in blocos
@@ -312,26 +367,17 @@ def enviar_notificacao():
     global is_whatsapp_connected
     bloco = request.form.get('bloco')
     apartamento = request.form.get('apartamento')
-    mensagem_padrao = f"""📦 *Aviso Importante: Encomenda Disponível!*\n
-Prezado morador do *{bloco} - {apartamento}*,
+    is_delivery = request.form.get('delivery')
 
-Informamos que há uma encomenda disponível para retirada na portaria.
-
-✅ *O que fazer?*
-- Por favor, compareça à portaria o mais breve possível para retirar sua encomenda.
-- Após a retirada, você pode enviar a palavra *_retirada_* nesta conversa para confirmar a retirada, ou solicitar ao porteiro que marque a encomenda como retirada no sistema.
-
-Agradecemos sua colaboração! 
-📍 _Portaria_
-"""
     _Morador = Morador.query.filter_by(bloco=bloco, apartamento=apartamento).all()
     if not _Morador:
         flash('Nenhum contato encontrado para esse apartamento.')
         return redirect(url_for('notificacao'))
     contatos_enviados = str()
+    mensagem_padrao = MENSAGEM_DELIVERY if is_delivery else MENSAGEM_ENCOMENDA
     for morador in _Morador:
         print(morador.contato)
-        payload = {"contato": morador.contato, "mensagem": mensagem_padrao}
+        payload = {"contato": morador.contato, "mensagem": mensagem_padrao.format(bloco, apartamento)}
         try:
             resp = requests.post('http://localhost:3000/enviar-mensagem', json=payload)
             print(resp.status_code)
@@ -352,68 +398,7 @@ Agradecemos sua colaboração!
         except Exception as e:
             flash(f"Erro ao enviar mensagem: {str(e)}")
             return redirect(url_for('mostrar_qr'))
-    registro = HistoricoRegistro(
-        tipo="Envio",
-        bloco=bloco,
-        apartamento=apartamento,
-        contato=contatos_enviados,
-        mensagem=mensagem_padrao.split(':')[0],
-        registrado_por="Sistema"
-    )
-    db.session.add(registro)
-    db.session.commit()
-    return redirect(url_for('notificacao'))
-
-
-@app.route('/enviar_notificacao_em_grupo', methods=['POST'])
-def enviar_notificacao_em_grupo():
-    global is_whatsapp_connected
-    destinatarios = request.form.getlist('destinatarios')
-
-    if not destinatarios:
-        flash("Por favor, selecione pelo menos um destinatário.")
-        return redirect(url_for('notificacao'))
-
-    for destinatario in destinatarios:
-        bloco, apartamento = destinatario.split('|')
-        mensagem_padrao = f"""📦 *Aviso Importante: Encomenda Disponível!*\n
-Prezado morador do *{bloco} - {apartamento}*,
-
-Informamos que há uma encomenda disponível para retirada na portaria.
-
-✅ *O que fazer?*
-- Por favor, compareça à portaria o mais breve possível para retirar sua encomenda.
-- Após a retirada, você pode enviar a palavra *_retirada_* nesta conversa para confirmar a retirada, ou solicitar ao porteiro que marque a encomenda como retirada no sistema.
-
-Agradecemos sua colaboração! 
-📍 _Portaria_
-"""
-        moradores = Morador.query.filter_by(bloco=bloco, apartamento=apartamento).all()
-
-        if not moradores:
-            flash(f"Não há moradores cadastrados no {bloco} - {apartamento}.")
-            continue
-
-        contatos_enviados = str()
-        for morador in moradores:
-            payload = {"contato": morador.contato, "mensagem": mensagem_padrao}
-            try:
-                resp = requests.post('http://localhost:3000/enviar-mensagem', json=payload)
-                if resp.status_code == 200:
-                    is_whatsapp_connected = True
-                    morador.ultima_notificacao = datetime.now()
-                    morador.encomenda_pendente = True
-                    db.session.commit()
-                    contatos_enviados += morador.contato + '\n'
-                    time.sleep(2)
-                else:
-                    is_whatsapp_connected = False
-                    flash(f"Erro ao enviar mensagem para {morador.contato}: {bloco} - {apartamento}")
-                    return redirect(url_for('mostrar_qr'))
-            except Exception as e:
-                flash(f"Erro ao enviar mensagem para {morador.contato}: {bloco} - {apartamento}")
-                return redirect(url_for('mostrar_qr'))
-        flash(f"Mensagem enviada para {bloco} - {apartamento}")
+    if not is_delivery:
         registro = HistoricoRegistro(
             tipo="Envio",
             bloco=bloco,
@@ -424,6 +409,60 @@ Agradecemos sua colaboração!
         )
         db.session.add(registro)
         db.session.commit()
+    return redirect(url_for('notificacao'))
+
+
+@app.route('/enviar_notificacao_em_grupo', methods=['POST'])
+def enviar_notificacao_em_grupo():
+    global is_whatsapp_connected
+    destinatarios = request.form.getlist('destinatarios')
+    is_delivery = request.form.get('delivery')
+    if not destinatarios:
+        flash("Por favor, selecione pelo menos um destinatário.")
+        return redirect(url_for('notificacao'))
+    for destinatario in destinatarios:
+        bloco, apartamento = destinatario.split('|')
+
+        moradores = Morador.query.filter_by(bloco=bloco, apartamento=apartamento).all()
+        mensagem_padrao = MENSAGEM_DELIVERY if is_delivery else MENSAGEM_ENCOMENDA
+
+        if not moradores:
+            flash(f"Não há moradores cadastrados no {bloco} - {apartamento}.")
+            continue
+
+        contatos_enviados = str()
+        for morador in moradores:
+            payload = {"contato": morador.contato, "mensagem": mensagem_padrao.format(bloco, apartamento)}
+            try:
+                resp = requests.post('http://localhost:3000/enviar-mensagem', json=payload)
+                if resp.status_code == 200:
+                    is_whatsapp_connected = True
+                    morador.ultima_notificacao = datetime.now()
+                    morador.encomenda_pendente = True
+                    db.session.commit()
+                    contatos_enviados += morador.contato + '\n'
+                    time.sleep(1)
+                else:
+                    is_whatsapp_connected = False
+                    flash(f"Erro ao enviar mensagem para {morador.contato}: {bloco} - {apartamento}")
+                    return redirect(url_for('mostrar_qr'))
+            except Exception as e:
+                flash(f"Erro ao enviar mensagem para {morador.contato}: {bloco} - {apartamento}")
+                return redirect(url_for('mostrar_qr'))
+
+        if not is_delivery:
+            registro = HistoricoRegistro(
+                tipo="Envio",
+                bloco=bloco,
+                apartamento=apartamento,
+                contato=contatos_enviados,
+                mensagem=mensagem_padrao.split(':')[0],
+                registrado_por="Sistema"
+            )
+            db.session.add(registro)
+            db.session.commit()
+        flash(f"Mensagem enviada para {bloco} - {apartamento}")
+
     flash("Notificações enviadas com sucesso!")
     return redirect(url_for('notificacao'))
 
@@ -447,7 +486,8 @@ def remover_encomenda(contato):
             apartamento=morador.apartamento,
             contato=morador.contato,
             mensagem="Retirada via WhatsApp.",
-            registrado_por="Usuário (WhatsApp)"
+            registrado_por="Usuário (WhatsApp)",
+            observacao="Retirada CONFIRMADA via WhatsApp pelo morador"
         )
         db.session.add(registro)
         db.session.commit()
@@ -460,84 +500,101 @@ def remover_encomenda(contato):
 
 @app.route('/remover-encomenda-porteiro/<bloco>/<apartamento>', methods=['GET', 'POST'])
 def remover_encomenda_porteiro(bloco, apartamento):
-    global is_whatsapp_connected
     if request.method == 'POST':
         observacao = request.form.get('observacao')
-        moradores_no_apartamento = Morador.query.filter_by(bloco=bloco, apartamento=apartamento,
-                                                           encomenda_pendente=True).all()
+        informacoes = request.form.get('informacoes')
+
+        moradores_no_apartamento = Morador.query.filter_by(
+            bloco=bloco,
+            apartamento=apartamento,
+            encomenda_pendente=True
+        ).all()
 
         if not moradores_no_apartamento:
             flash(f"Nenhuma encomenda pendente encontrada para o {bloco} - {apartamento}.")
             return redirect(url_for('historico_notificacoes'))
 
-        contatos_list = str()
+        contatos_list = ""
         for morador in moradores_no_apartamento:
             morador.encomenda_pendente = False
+            contatos_list += morador.contato + "\n"
 
-            mensagem = f"📦 Olá! A encomenda no {bloco} - {apartamento} foi registrada como retirada."
-            try:
-                resp = requests.post(
-                    'http://localhost:3000/enviar-mensagem',
-                    json={"contato": morador.contato, "mensagem": mensagem}
-                )
-                if resp.status_code == 200:
-                    is_whatsapp_connected = True
-                    contatos_list += morador.contato + '\n'
-            except Exception as e:
-                print(f"Erro ao enviar notificação para {morador.contato}: {e}")
-
-        db.session.commit()
         registro = HistoricoRegistro(
             tipo="Retirada",
             bloco=bloco,
             apartamento=apartamento,
             contato=contatos_list.strip(),
-            mensagem="Retirada pela portaria.",
+            mensagem=informacoes or "N/A",
             registrado_por="Porteiro",
-            observacao=observacao
+            observacao=f"{observacao or ''} | {informacoes or ''}"
         )
         db.session.add(registro)
         db.session.commit()
-
         flash(f"A retirada foi registrada com sucesso para o {bloco} - {apartamento}.")
         return redirect(url_for('historico_notificacoes'))
-    return render_template('remover_encomenda_form.html', bloco=bloco, apartamento=apartamento,
-                           conectado=is_whatsapp_connected)
+
+    return render_template('remover_encomenda_form.html', bloco=bloco, apartamento=apartamento)
 
 
 @app.route('/historico-envios-e-retiradas', methods=['GET', 'POST'])
 def historico_envios_e_retiradas():
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
-    tipo = request.args.get('tipo')
     bloco = request.args.get('bloco')
     apartamento = request.args.get('apartamento')
     registrado_por = request.args.get('registrado_por')
 
-    query = HistoricoRegistro.query
+    query_envios = HistoricoRegistro.query.filter(HistoricoRegistro.tipo == "Envio")
 
     if data_inicio:
-        query = query.filter(HistoricoRegistro.data_registro >= datetime.strptime(data_inicio, '%Y-%m-%d'))
+        dt_inicio = datetime.strptime(data_inicio, '%Y-%m-%d')
+        query_envios = query_envios.filter(HistoricoRegistro.data_registro >= dt_inicio)
     if data_fim:
-        query = query.filter(
-            HistoricoRegistro.data_registro <= datetime.strptime(data_fim, '%Y-%m-%d') + timedelta(days=1))
-    if tipo:
-        query = query.filter(HistoricoRegistro.tipo == tipo)
+        dt_fim = datetime.strptime(data_fim, '%Y-%m-%d') + timedelta(days=1)
+        query_envios = query_envios.filter(HistoricoRegistro.data_registro < dt_fim)
     if bloco:
-        query = query.filter(HistoricoRegistro.bloco == bloco)
+        query_envios = query_envios.filter(HistoricoRegistro.bloco == bloco)
     if apartamento:
-        query = query.filter(HistoricoRegistro.apartamento == apartamento)
+        query_envios = query_envios.filter(HistoricoRegistro.apartamento == apartamento)
     if registrado_por:
-        query = query.filter(HistoricoRegistro.registrado_por == registrado_por)
-    registros = query.order_by(HistoricoRegistro.data_registro.desc()).all()
+        query_envios = query_envios.filter(HistoricoRegistro.registrado_por == registrado_por)
+    envios = query_envios.order_by(HistoricoRegistro.data_registro.desc()).all()
+    rows = []
+    for envio in envios:
+        query_retirada = HistoricoRegistro.query.filter(
+            HistoricoRegistro.tipo == "Retirada",
+            HistoricoRegistro.bloco == envio.bloco,
+            HistoricoRegistro.apartamento == envio.apartamento,
+            HistoricoRegistro.data_registro >= envio.data_registro
+        )
+        if data_fim:
+            query_retirada = query_retirada.filter(HistoricoRegistro.data_registro < dt_fim)
+        retirada = query_retirada.order_by(HistoricoRegistro.data_registro.asc()).first()
+        data_entrada = envio.data_registro
+        data_saida = retirada.data_registro if retirada else None
+        bloco_ = envio.bloco
+        apt_ = envio.apartamento
+        lista_contatos = envio.contato
+        informacoes_encomenda = retirada.observacao if retirada else "N/A"
+        observacao_ = retirada.observacao if retirada else None
+        rows.append({
+            "data_entrada": data_entrada,
+            "data_saida": data_saida,
+            "bloco": bloco_,
+            "apartamento": apt_,
+            "contatos": lista_contatos,
+            "informacoes_encomenda": informacoes_encomenda,
+            "observacao": observacao_
+        })
+
     blocos = db.session.query(HistoricoRegistro.bloco).distinct().all()
     blocos = [b[0] for b in blocos]
-
     apartamentos = db.session.query(HistoricoRegistro.apartamento).distinct().all()
     apartamentos = [a[0] for a in apartamentos]
+
     return render_template(
         'historico_registros.html',
-        registros=registros,
+        rows=rows,
         blocos=blocos,
         apartamentos=apartamentos,
         conectado=is_whatsapp_connected
@@ -557,6 +614,7 @@ def fechar_sistema():
     os.kill(current_pid, signal.SIGTERM)
     return "Sistema encerrado com sucesso."
 
+
 @app.route('/exportar-historico', methods=['GET'])
 def exportar_historico():
     data_inicio = request.args.get('data_inicio')
@@ -565,12 +623,15 @@ def exportar_historico():
     bloco = request.args.get('bloco')
     apartamento = request.args.get('apartamento')
     registrado_por = request.args.get('registrado_por')
+
     query = HistoricoRegistro.query
 
+    # Filtros
     if data_inicio:
         query = query.filter(HistoricoRegistro.data_registro >= datetime.strptime(data_inicio, '%Y-%m-%d'))
     if data_fim:
-        query = query.filter(HistoricoRegistro.data_registro <= datetime.strptime(data_fim, '%Y-%m-%d') + timedelta(days=1))
+        query = query.filter(
+            HistoricoRegistro.data_registro <= datetime.strptime(data_fim, '%Y-%m-%d') + timedelta(days=1))
     if tipo:
         query = query.filter(HistoricoRegistro.tipo == tipo)
     if bloco:
@@ -580,37 +641,60 @@ def exportar_historico():
     if registrado_por:
         query = query.filter(HistoricoRegistro.registrado_por == registrado_por)
 
-    # Obter registros filtrados
     registros = query.order_by(HistoricoRegistro.data_registro.desc()).all()
-    output = io.StringIO()
-    writer = csv.writer(output, delimiter=";", quoting=csv.QUOTE_NONE, escapechar='\\')
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Histórico"
 
-    writer.writerow(["Data", "Tipo", "Bloco", "Apartamento", "Contato", "Mensagem", "Registrado Por", "Observação"])
-    for registro in registros:
-        writer.writerow([
-            registro.data_registro.strftime('%d/%m/%Y %H:%M'),
-            registro.tipo.replace('\n', ' ') if registro.tipo else registro.tipo,
-            registro.bloco.replace('\n', ' ') if registro.bloco else registro.bloco,
-            registro.apartamento.replace('\n', ' ') if registro.apartamento else registro.apartamento,
-            '| ' + registro.contato.replace("\n", " | ") + ' | ' or "N/A" if registro.contato[-1] != '\n' else '| ' + registro.contato.replace("\n", " | ") or "N/A",
-            registro.mensagem.replace('\n', ' ') if registro.mensagem else registro.mensagem,
-            registro.registrado_por.replace('\n', ' ') if registro.registrado_por else registro.registrado_por,
-            registro.observacao.replace('\n', ' ') or "N/A" if registro.observacao else "N/A"
+    ws.append(["Data Entrada", "Data Retirada", "Bloco", "Apartamento", "Contato", "Observacao"])
+
+    # Função auxiliar para remover quebras de linha
+    def remove_newlines(text):
+        return text.replace('\n', ' ') if text else text
+
+    rows = list()
+    for envio in registros:
+        query_retirada = HistoricoRegistro.query.filter(
+            HistoricoRegistro.tipo == "Retirada",
+            HistoricoRegistro.bloco == envio.bloco,
+            HistoricoRegistro.apartamento == envio.apartamento,
+            HistoricoRegistro.data_registro >= envio.data_registro
+        )
+        retirada = query_retirada.order_by(HistoricoRegistro.data_registro.asc()).first()
+
+        if retirada and retirada.data_registro == envio.data_registro:
+            continue
+        data_entrada = envio.data_registro
+        data_saida = retirada.data_registro if retirada and retirada.data_registro else None
+        bloco_ = envio.bloco
+        apt_ = envio.apartamento
+        lista_contatos = envio.contato.split()
+        observacao_ = retirada.observacao if retirada else 'Encomenda ainda nao foi retirada'
+        rows.append([
+            data_entrada.strftime('%d/%m/%Y %H:%M'),
+            data_saida.strftime('%d/%m/%Y %H:%M') if data_saida != None else None,
+            remove_newlines(bloco_),
+            remove_newlines(apt_),
+            remove_newlines(' |'.join(lista_contatos)),
+            remove_newlines(observacao_)
         ])
-    bom_output = "\ufeff" + output.getvalue()
+    print(rows)
+    for i in rows:
+        ws.append(i)
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
     response = Response(
-        bom_output,
-        mimetype="text/csv",
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
-            "Content-Disposition": "attachment;filename=historico_registros.csv",
-            "Content-Type": "text/csv; charset=utf-8"
+            "Content-Disposition": f"attachment; filename=historico_registros_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         }
     )
-    output.close()
     return response
 
 
-# ========= Iniciar o Servidor ===========
 if __name__ == '__main__':
     status_thread = threading.Thread(target=update_whatsapp_status, daemon=True)
     status_thread.start()
